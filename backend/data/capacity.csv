@@ -1,0 +1,49 @@
+corridor_id,mode,label,capacity_tonnes,available_percent,status
+northeast,road,Truck backhaul slots,2696,48,Return-load monetisation opportunity
+northeast,air,Belly cargo windows,84,25,Premium urgent cargo capacity
+northeast,sea,Port feeder linkage,601,26,Bulk export and feeder flow
+northeast,staging,Consolidation buffer,474,52,Cross-dock and rest-area buffer
+west,road,Truck backhaul slots,1782,70,Return-load monetisation opportunity
+west,air,Belly cargo windows,42,23,Premium urgent cargo capacity
+west,sea,Port feeder linkage,353,32,Bulk export and feeder flow
+west,staging,Consolidation buffer,276,46,Cross-dock and rest-area buffer
+coastal,road,Truck backhaul slots,1425,42,Return-load monetisation opportunity
+coastal,air,Belly cargo windows,59,37,Premium urgent cargo capacity
+coastal,sea,Port feeder linkage,368,35,Bulk export and feeder flow
+coastal,staging,Consolidation buffer,298,41,Cross-dock and rest-area buffer
+north,road,Truck backhaul slots,2073,61,Return-load monetisation opportunity
+north,air,Belly cargo windows,62,32,Premium urgent cargo capacity
+north,sea,Port feeder linkage,528,41,Bulk export and feeder flow
+north,staging,Consolidation buffer,307,53,Cross-dock and rest-area buffer
+east-port,road,Truck backhaul slots,1216,61,Return-load monetisation opportunity
+east-port,air,Belly cargo windows,100,26,Premium urgent cargo capacity
+east-port,sea,Port feeder linkage,290,34,Bulk export and feeder flow
+east-port,staging,Consolidation buffer,185,34,Cross-dock and rest-area buffer
+bengaluru-export,road,Truck backhaul slots,1554,49,Return-load monetisation opportunity
+bengaluru-export,air,Belly cargo windows,30,32,Premium urgent cargo capacity
+bengaluru-export,sea,Port feeder linkage,329,29,Bulk export and feeder flow
+bengaluru-export,staging,Consolidation buffer,328,49,Cross-dock and rest-area buffer
+delhi-ncr,road,Truck backhaul slots,1035,51,Return-load monetisation opportunity
+delhi-ncr,air,Belly cargo windows,104,28,Premium urgent cargo capacity
+delhi-ncr,sea,Port feeder linkage,247,56,Bulk export and feeder flow
+delhi-ncr,staging,Consolidation buffer,205,60,Cross-dock and rest-area buffer
+central,road,Truck backhaul slots,1495,43,Return-load monetisation opportunity
+central,air,Belly cargo windows,67,34,Premium urgent cargo capacity
+central,sea,Port feeder linkage,280,32,Bulk export and feeder flow
+central,staging,Consolidation buffer,324,35,Cross-dock and rest-area buffer
+kashmir,road,Truck backhaul slots,810,48,Return-load monetisation opportunity
+kashmir,air,Belly cargo windows,28,43,Premium urgent cargo capacity
+kashmir,sea,Port feeder linkage,210,28,Bulk export and feeder flow
+kashmir,staging,Consolidation buffer,117,62,Cross-dock and rest-area buffer
+hyderabad,road,Truck backhaul slots,1717,56,Return-load monetisation opportunity
+hyderabad,air,Belly cargo windows,153,40,Premium urgent cargo capacity
+hyderabad,sea,Port feeder linkage,367,52,Bulk export and feeder flow
+hyderabad,staging,Consolidation buffer,329,59,Cross-dock and rest-area buffer
+gujarat,road,Truck backhaul slots,1685,52,Return-load monetisation opportunity
+gujarat,air,Belly cargo windows,78,25,Premium urgent cargo capacity
+gujarat,sea,Port feeder linkage,471,44,Bulk export and feeder flow
+gujarat,staging,Consolidation buffer,234,49,Cross-dock and rest-area buffer
+eastern-rail,road,Truck backhaul slots,1288,69,Return-load monetisation opportunity
+eastern-rail,air,Belly cargo windows,28,25,Premium urgent cargo capacity
+eastern-rail,sea,Port feeder linkage,265,39,Bulk export and feeder flow
+eastern-rail,staging,Consolidation buffer,214,61,Cross-dock and rest-area buffer

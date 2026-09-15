@@ -232,6 +232,9 @@ button {
 .corridor-list {
   display: grid;
   gap: 8px;
+  max-height: 460px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .corridor-row {
@@ -503,6 +506,13 @@ button {
 .match-list {
   display: grid;
   gap: 10px;
+}
+
+.list-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 650;
 }
 
 .match-row {

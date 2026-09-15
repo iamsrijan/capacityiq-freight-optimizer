@@ -1,0 +1,13 @@
+id,name,anchor,origin,destination,return_lane,recurring,distance_km,baseline_empty_km,base_anchor_tonnes,vehicles,service_level,region
+northeast,Northeast Backhaul,Britannia Kolkata to Guwahati loop,Kolkata / Siliguri,Guwahati + Upper Assam,Northeast to East and North India,6 dispatch waves per week,1120,87000,2420,176,91,East and Northeast
+west,Western FMCG Loop,Britannia Pune to Rajasthan distribution,Pune / Nashik,Jaipur + Jodhpur,Rajasthan to Maharashtra and South,4 dispatch waves per week,940,52000,1680,118,88,West
+coastal,Coastal Export Relay,Britannia Chennai to Kerala replenishment,Chennai,Kochi + Calicut,Kerala to Tamil Nadu and export ports,5 dispatch waves per week,720,43000,1320,94,93,South Coast
+north,North Market Rebalance,Britannia Delhi NCR to Punjab and Himachal,Delhi NCR,Ludhiana + Baddi,Punjab and Himachal to NCR,7 dispatch waves per week,520,41000,1880,132,90,North
+east-port,East Port Connector,Britannia Bhubaneswar to Odisha and Bengal,Bhubaneswar / Cuttack,Kolkata + Paradip,Odisha ports to eastern consumption hubs,5 dispatch waves per week,480,36000,1160,86,89,East Coast
+bengaluru-export,Bengaluru Export Feeder,Britannia Bengaluru to Mangaluru and Goa,Bengaluru,Mangaluru + Goa,Coastal Karnataka to Bengaluru and export gateways,6 dispatch waves per week,640,39000,1420,102,92,Southwest
+delhi-ncr,Delhi NCR Urban Ring,Britannia NCR urban replenishment,Greater Noida / Sonipat,Delhi NCR retail ring,NCR spokes to consolidation hubs,14 dispatch waves per week,210,28000,980,148,94,Metro North
+central,Central India Crossdock,Britannia Nagpur to MP and Chhattisgarh,Nagpur,Indore + Raipur,Central India to national hubs,5 dispatch waves per week,690,44000,1380,108,87,Central
+kashmir,Kashmir Seasonal Return,Britannia Jammu to Srinagar seasonal loop,Jammu,Srinagar + Baramulla,Kashmir valley to north Indian markets,3 dispatch waves per week,310,24000,760,64,84,North Hills
+hyderabad,Hyderabad Pharma Backhaul,Britannia Hyderabad to Telangana and AP,Hyderabad,Vijayawada + Visakhapatnam,Andhra and Telangana to pharma and port hubs,6 dispatch waves per week,620,40000,1510,116,93,Telugu States
+gujarat,Gujarat Export Loop,Britannia Ahmedabad to Kutch and Saurashtra,Ahmedabad,Rajkot + Kandla,Kutch and Saurashtra to west and north markets,6 dispatch waves per week,650,47000,1590,123,90,Gujarat
+eastern-rail,Eastern Rail-Air Relay,Britannia Patna to Bengal and Jharkhand,Patna,Ranchi + Kolkata,Bihar and Jharkhand to east and north hubs,5 dispatch waves per week,580,37000,1210,98,86,Eastern Inland

@@ -1,0 +1,41 @@
+retail_id,label,share,uplift
+africa,Indian and African handicrafts,30,18
+africa,"Tea, coffee and sweets gifting",24,14
+africa,Durable snacks,18,9
+africa,Travel electronics,15,7
+africa,Beauty and wellness,13,6
+uk,Premium Indian spirits,26,20
+uk,Luxury sweets and bakery gifting,22,13
+uk,"Tea, coffee and wellness",20,11
+uk,Designer craft,17,8
+uk,Travel essentials,15,5
+saudi,"Dates, sweets and bakery gifting",28,16
+saudi,Fragrance and personal care,24,12
+saudi,Modest fashion accessories,18,8
+saudi,Travel health essentials,17,7
+saudi,Prayer and family travel items,13,6
+south-east-asia,Premium snacks and sweets,25,14
+south-east-asia,Ayurveda and wellness,20,11
+south-east-asia,Beauty minis,18,10
+south-east-asia,Travel electronics,17,7
+south-east-asia,Tea and coffee gifting,20,9
+middle-east,Fragrance and personal care,24,13
+middle-east,Sweets and bakery gifting,23,12
+middle-east,Travel health,17,8
+middle-east,Premium dates and nuts,20,10
+middle-east,Family travel essentials,16,6
+domestic-metro,Ready-to-eat snacks,26,12
+domestic-metro,Coffee and bakery,22,10
+domestic-metro,Travel essentials,20,7
+domestic-metro,Impulse sweets,16,8
+domestic-metro,Personal care minis,16,5
+europe,Premium Indian spirits,22,17
+europe,Designer craft and textiles,20,11
+europe,Luxury sweets,21,12
+europe,"Tea, coffee and wellness",20,9
+europe,Travel luxury accessories,17,7
+north-america,Premium sweets and bakery,25,14
+north-america,"Tea, coffee and wellness",22,10
+north-america,Designer craft,17,8
+north-america,Long-haul travel essentials,18,7
+north-america,Beauty and personal care,18,6

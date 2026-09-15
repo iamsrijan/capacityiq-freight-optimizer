@@ -6,7 +6,11 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "vinext dev",
+    "dev": "bash scripts/start-local.sh",
+    "dev:frontend": "vinext dev",
+    "dev:backend": "python3 backend/server.py --host 127.0.0.1 --port 8000",
+    "seed:data": "python3 scripts/seed_dummy_data.py",
+    "test:backend": "python3 backend/test_api.py",
     "build": "vinext build",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"

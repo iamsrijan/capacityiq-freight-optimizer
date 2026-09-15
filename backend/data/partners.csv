@@ -1,0 +1,145 @@
+id,name,type,home_region,modes,fleet_size,on_time_percent,cancellation_rate_percent,claims_rate_percent
+PTR-0001,Apex Logistics,3pl,South Coast,road|staging,131,89,3.2,0.3
+PTR-0002,Frontier Fleet,air-cargo,West,air|staging,8,78,3.7,0.2
+PTR-0003,Pragati Supply,air-cargo,Metro North,air|staging,18,82,6.7,0.7
+PTR-0004,Harbour Cargo,air-cargo,West,air|staging,16,86,6.9,1.1
+PTR-0005,Bharat Cargo,air-cargo,South Coast,air|staging,10,89,7.9,1.1
+PTR-0006,Frontier Logistics,transporter,Southwest,road|staging,210,87,7.6,1.2
+PTR-0007,Nexus Logistics,warehouse,East and Northeast,staging|road,2,88,7.3,2.8
+PTR-0008,Apex Freight,3pl,North Hills,road|staging,131,95,2.3,1.3
+PTR-0009,Dakshin Supply,air-cargo,North,air|staging,5,87,4.7,2.5
+PTR-0010,Nexus Carriers,air-cargo,North Hills,air|staging,11,94,5.9,0.2
+PTR-0011,Dakshin Supply,warehouse,Central,staging|road,2,79,5.6,2.5
+PTR-0012,Bharat Logistics,warehouse,East Coast,staging|road,6,79,2.7,2.9
+PTR-0013,Frontier Supply,shipping,East and Northeast,sea|staging,3,98,2.6,2.3
+PTR-0014,Frontier Freight,transporter,Eastern Inland,road|staging,200,83,3.0,2.2
+PTR-0015,Dakshin Supply,air-cargo,Central,air|staging,16,93,7.9,2.5
+PTR-0016,Bharat Cargo,shipping,East Coast,sea|staging,8,93,5.7,0.9
+PTR-0017,Bharat Cargo,air-cargo,West,air|staging,16,98,3.8,1.0
+PTR-0018,Crescent Carriers,shipping,Central,sea|staging,9,85,1.9,2.1
+PTR-0019,Bharat Freight,transporter,South Coast,road|staging,126,83,7.8,2.3
+PTR-0020,Dakshin Fleet,transporter,Eastern Inland,road|staging,17,98,8.1,2.8
+PTR-0021,Pragati Logistics,transporter,North Hills,road|staging,160,96,8.4,1.0
+PTR-0022,Bharat Cargo,3pl,Southwest,road|staging,57,98,4.8,1.8
+PTR-0023,Dakshin Cargo,3pl,Telugu States,road|staging,111,86,5.1,2.7
+PTR-0024,Pragati Logistics,transporter,Central,road|staging,192,80,2.3,0.4
+PTR-0025,Crescent Supply,shipping,Metro North,sea|staging,7,86,2.9,1.5
+PTR-0026,Pragati Logistics,3pl,Metro North,road|staging,260,82,8.2,2.1
+PTR-0027,Frontier Supply,transporter,Metro North,road|staging,146,93,6.0,1.1
+PTR-0028,Frontier Logistics,air-cargo,Telugu States,air|staging,8,81,4.0,1.4
+PTR-0029,Bharat Freight,3pl,North Hills,road|staging,64,94,0.8,2.1
+PTR-0030,Apex Cargo,warehouse,East Coast,staging|road,3,80,1.0,0.7
+PTR-0031,Nexus Logistics,3pl,Gujarat,road|staging,224,86,6.6,2.3
+PTR-0032,Eastern Freight,air-cargo,West,air|staging,10,79,5.1,2.4
+PTR-0033,Bharat Fleet,transporter,Metro North,road|staging,86,94,5.8,1.2
+PTR-0034,Pragati Cargo,shipping,Central,sea|staging,5,81,3.2,2.1
+PTR-0035,Nexus Cargo,warehouse,Metro North,staging|road,1,91,1.7,1.6
+PTR-0036,Eastern Fleet,3pl,Metro North,road|staging,164,85,6.3,2.3
+PTR-0037,Crescent Fleet,shipping,West,sea|staging,6,81,1.9,3.1
+PTR-0038,Pragati Fleet,shipping,Metro North,sea|staging,12,89,8.2,2.5
+PTR-0039,Apex Cargo,shipping,Southwest,sea|staging,7,88,6.2,3.2
+PTR-0040,Eastern Fleet,transporter,Telugu States,road|staging,83,89,1.6,1.8
+PTR-0041,Dakshin Carriers,air-cargo,East and Northeast,air|staging,12,90,2.2,0.5
+PTR-0042,Gateway Supply,3pl,Gujarat,road|staging,259,89,2.2,0.6
+PTR-0043,Bharat Supply,shipping,Telugu States,sea|staging,11,78,3.4,0.1
+PTR-0044,Apex Logistics,warehouse,North Hills,staging|road,4,80,5.5,0.2
+PTR-0045,Bharat Carriers,transporter,Central,road|staging,250,97,1.8,1.3
+PTR-0046,Frontier Carriers,shipping,Central,sea|staging,6,93,2.9,0.9
+PTR-0047,Gateway Supply,transporter,Eastern Inland,road|staging,27,83,4.6,3.1
+PTR-0048,Bharat Cargo,warehouse,East Coast,staging|road,8,93,4.9,0.5
+PTR-0049,Frontier Fleet,warehouse,North,staging|road,2,85,8.4,1.9
+PTR-0050,Pragati Supply,3pl,Eastern Inland,road|staging,180,81,3.5,0.2
+PTR-0051,Frontier Carriers,transporter,Southwest,road|staging,133,98,8.5,3.0
+PTR-0052,Frontier Freight,air-cargo,East Coast,air|staging,4,88,6.9,1.1
+PTR-0053,Gateway Carriers,3pl,Gujarat,road|staging,139,89,6.0,2.9
+PTR-0054,Dakshin Supply,warehouse,West,staging|road,4,80,7.1,2.0
+PTR-0055,Harbour Carriers,transporter,Metro North,road|staging,14,96,5.6,2.7
+PTR-0056,Dakshin Freight,transporter,North Hills,road|staging,17,82,1.3,1.7
+PTR-0057,Dakshin Freight,air-cargo,Telugu States,air|staging,14,89,2.9,1.5
+PTR-0058,Crescent Carriers,shipping,Metro North,sea|staging,10,81,0.9,2.3
+PTR-0059,Apex Carriers,3pl,West,road|staging,63,98,7.7,1.2
+PTR-0060,Nexus Carriers,air-cargo,Eastern Inland,air|staging,14,88,3.4,2.9
+PTR-0061,Harbour Logistics,3pl,Southwest,road|staging,38,97,8.4,0.7
+PTR-0062,Apex Fleet,air-cargo,Metro North,air|staging,15,85,1.3,0.2
+PTR-0063,Dakshin Logistics,3pl,North Hills,road|staging,110,86,2.8,0.7
+PTR-0064,Harbour Supply,transporter,Eastern Inland,road|staging,117,92,7.6,2.1
+PTR-0065,Harbour Carriers,shipping,North,sea|staging,11,92,7.3,1.4
+PTR-0066,Apex Freight,transporter,Eastern Inland,road|staging,227,97,4.3,1.4
+PTR-0067,Nexus Supply,3pl,South Coast,road|staging,235,88,1.4,3.2
+PTR-0068,Dakshin Supply,transporter,East and Northeast,road|staging,86,98,3.6,2.3
+PTR-0069,Dakshin Fleet,air-cargo,West,air|staging,10,79,6.2,3.2
+PTR-0070,Dakshin Supply,air-cargo,Eastern Inland,air|staging,17,81,4.4,0.4
+PTR-0071,Dakshin Carriers,3pl,North Hills,road|staging,160,84,4.1,2.4
+PTR-0072,Pragati Fleet,air-cargo,Gujarat,air|staging,4,94,3.8,0.7
+PTR-0073,Apex Logistics,transporter,Metro North,road|staging,223,83,7.9,2.1
+PTR-0074,Dakshin Freight,warehouse,East and Northeast,staging|road,2,82,6.7,1.6
+PTR-0075,Bharat Carriers,shipping,Eastern Inland,sea|staging,1,89,6.6,2.2
+PTR-0076,Nexus Supply,warehouse,East and Northeast,staging|road,2,81,2.5,0.6
+PTR-0077,Pragati Freight,warehouse,South Coast,staging|road,3,92,1.6,1.9
+PTR-0078,Apex Fleet,shipping,East and Northeast,sea|staging,4,81,2.1,0.3
+PTR-0079,Harbour Fleet,shipping,Telugu States,sea|staging,6,83,7.0,2.7
+PTR-0080,Harbour Fleet,shipping,Central,sea|staging,11,83,4.0,0.7
+PTR-0081,Dakshin Logistics,3pl,Central,road|staging,205,84,6.5,2.8
+PTR-0082,Frontier Freight,3pl,West,road|staging,96,82,6.2,2.8
+PTR-0083,Eastern Supply,transporter,North Hills,road|staging,85,97,0.9,1.7
+PTR-0084,Pragati Cargo,shipping,Southwest,sea|staging,6,92,2.2,0.9
+PTR-0085,Apex Freight,shipping,North Hills,sea|staging,3,97,7.1,0.4
+PTR-0086,Apex Freight,air-cargo,Telugu States,air|staging,13,86,0.9,0.4
+PTR-0087,Crescent Freight,warehouse,Southwest,staging|road,6,97,6.9,1.5
+PTR-0088,Crescent Cargo,3pl,Eastern Inland,road|staging,99,80,1.2,2.2
+PTR-0089,Eastern Fleet,shipping,North Hills,sea|staging,8,83,1.7,0.2
+PTR-0090,Apex Logistics,shipping,North,sea|staging,2,95,5.6,1.3
+PTR-0091,Gateway Cargo,3pl,West,road|staging,43,95,1.7,0.4
+PTR-0092,Eastern Cargo,air-cargo,North,air|staging,15,96,4.5,1.4
+PTR-0093,Frontier Freight,shipping,East and Northeast,sea|staging,10,80,2.6,1.0
+PTR-0094,Bharat Fleet,shipping,West,sea|staging,1,91,5.7,1.6
+PTR-0095,Dakshin Supply,warehouse,Central,staging|road,4,97,4.1,1.5
+PTR-0096,Pragati Supply,shipping,North Hills,sea|staging,8,85,3.5,0.8
+PTR-0097,Dakshin Carriers,warehouse,Metro North,staging|road,3,80,5.1,3.2
+PTR-0098,Dakshin Freight,warehouse,West,staging|road,3,89,1.3,2.1
+PTR-0099,Eastern Supply,shipping,Metro North,sea|staging,7,98,1.0,2.6
+PTR-0100,Gateway Supply,transporter,Metro North,road|staging,41,89,3.4,1.1
+PTR-0101,Eastern Cargo,shipping,Eastern Inland,sea|staging,5,79,6.0,0.1
+PTR-0102,Nexus Supply,3pl,Gujarat,road|staging,247,81,5.6,1.2
+PTR-0103,Harbour Carriers,transporter,Telugu States,road|staging,12,80,6.3,2.8
+PTR-0104,Eastern Cargo,air-cargo,South Coast,air|staging,14,88,7.8,2.4
+PTR-0105,Bharat Freight,transporter,North,road|staging,182,81,3.0,0.6
+PTR-0106,Crescent Fleet,warehouse,Metro North,staging|road,1,90,6.9,2.5
+PTR-0107,Eastern Supply,air-cargo,North,air|staging,4,88,4.5,0.1
+PTR-0108,Bharat Carriers,3pl,Southwest,road|staging,82,80,7.7,1.0
+PTR-0109,Bharat Logistics,3pl,Telugu States,road|staging,147,85,1.9,2.4
+PTR-0110,Frontier Freight,shipping,Metro North,sea|staging,12,82,5.6,2.1
+PTR-0111,Nexus Carriers,3pl,North Hills,road|staging,148,93,3.9,0.8
+PTR-0112,Dakshin Carriers,shipping,Gujarat,sea|staging,12,92,3.7,2.8
+PTR-0113,Apex Carriers,shipping,Gujarat,sea|staging,9,84,6.2,1.9
+PTR-0114,Gateway Fleet,warehouse,North Hills,staging|road,7,98,3.6,1.0
+PTR-0115,Eastern Fleet,transporter,East Coast,road|staging,260,78,6.4,1.7
+PTR-0116,Eastern Carriers,air-cargo,West,air|staging,13,82,6.7,2.0
+PTR-0117,Pragati Logistics,shipping,North,sea|staging,7,98,7.7,0.7
+PTR-0118,Bharat Supply,3pl,South Coast,road|staging,248,89,6.1,2.6
+PTR-0119,Pragati Supply,air-cargo,South Coast,air|staging,9,92,3.5,2.2
+PTR-0120,Bharat Cargo,warehouse,Eastern Inland,staging|road,5,86,5.0,0.5
+PTR-0121,Bharat Fleet,air-cargo,North Hills,air|staging,16,80,2.9,1.6
+PTR-0122,Crescent Cargo,air-cargo,North Hills,air|staging,17,96,1.9,1.5
+PTR-0123,Nexus Carriers,3pl,West,road|staging,246,86,6.2,0.5
+PTR-0124,Nexus Supply,3pl,North Hills,road|staging,34,88,2.6,1.5
+PTR-0125,Apex Fleet,warehouse,West,staging|road,2,88,5.8,0.7
+PTR-0126,Bharat Logistics,3pl,Telugu States,road|staging,237,83,5.0,1.5
+PTR-0127,Nexus Carriers,warehouse,Central,staging|road,5,84,5.0,2.1
+PTR-0128,Dakshin Cargo,transporter,East and Northeast,road|staging,176,87,2.2,1.7
+PTR-0129,Nexus Logistics,shipping,West,sea|staging,6,93,1.8,2.0
+PTR-0130,Nexus Fleet,air-cargo,Telugu States,air|staging,13,83,7.2,1.0
+PTR-0131,Eastern Carriers,transporter,Southwest,road|staging,13,85,4.6,0.5
+PTR-0132,Bharat Freight,air-cargo,North,air|staging,12,80,3.5,1.1
+PTR-0133,Frontier Cargo,transporter,Telugu States,road|staging,112,86,2.5,1.9
+PTR-0134,Eastern Carriers,warehouse,Gujarat,staging|road,2,81,4.1,1.9
+PTR-0135,Bharat Logistics,transporter,East Coast,road|staging,141,81,7.6,1.7
+PTR-0136,Frontier Freight,transporter,East Coast,road|staging,141,94,6.7,2.5
+PTR-0137,Gateway Carriers,shipping,Eastern Inland,sea|staging,11,97,7.6,1.9
+PTR-0138,Gateway Freight,transporter,Metro North,road|staging,212,79,4.2,1.2
+PTR-0139,Eastern Cargo,warehouse,Metro North,staging|road,5,84,5.5,1.1
+PTR-0140,Bharat Freight,transporter,West,road|staging,181,86,7.2,3.1
+PTR-0141,Dakshin Logistics,shipping,North Hills,sea|staging,2,89,6.9,1.6
+PTR-0142,Bharat Logistics,air-cargo,East Coast,air|staging,16,88,1.2,0.4
+PTR-0143,Apex Supply,warehouse,Gujarat,staging|road,6,82,3.3,0.2
+PTR-0144,Nexus Logistics,transporter,Southwest,road|staging,17,93,3.6,2.9

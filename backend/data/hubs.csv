@@ -1,0 +1,43 @@
+id,name,city,state,modes,dock_doors,staging_tonnes,cold_capacity_tonnes,reliability
+HUB-001,Guwahati Consolidation Park,Guwahati,Assam,road|sea|staging,13,673,116,88
+HUB-002,Siliguri Gateway Hub,Siliguri,West Bengal,road|staging,35,1639,253,93
+HUB-003,Haldia Port Buffer,Haldia,West Bengal,road|staging,33,649,368,93
+HUB-004,Jaipur Rest And Sort,Jaipur,Rajasthan,road|air|staging,36,727,248,95
+HUB-005,Jodhpur Dry Cargo Yard,Jodhpur,Rajasthan,road|air|staging,44,1700,167,97
+HUB-006,Mumbai Air Cargo Annex,Mumbai,Maharashtra,road|air|staging,26,747,272,86
+HUB-007,Pune FMCG Crossdock,Pune,Maharashtra,road|staging,35,329,325,83
+HUB-008,Kochi Warehouse Buffer,Kochi,Kerala,road|air|staging,37,1058,189,79
+HUB-009,Chennai Export Staging,Chennai,Tamil Nadu,road,39,1787,231,88
+HUB-010,Bengaluru Airport Cargo,Bengaluru,Karnataka,road,13,463,51,81
+HUB-011,Hyderabad Pharma Park,Hyderabad,Telangana,road|air|staging,35,2141,317,83
+HUB-012,Nagpur Central Crossdock,Nagpur,Maharashtra,road|sea|staging,41,2362,389,81
+HUB-013,Indore Reefer Bay,Indore,Madhya Pradesh,road|sea|staging,34,1482,364,81
+HUB-014,Raipur Inland Terminal,Raipur,Chhattisgarh,road|air|staging,14,2345,12,88
+HUB-015,Delhi NCR Urban Node,Greater Noida,Uttar Pradesh,road|staging,24,1558,162,92
+HUB-016,Sonipat Cold Buffer,Sonipat,Haryana,road|sea|staging,18,1175,130,84
+HUB-017,Baddi Industrial Staging,Baddi,Himachal Pradesh,road|sea|staging,21,1469,161,97
+HUB-018,Ludhiana Return Yard,Ludhiana,Punjab,road|air|staging,32,2373,387,89
+HUB-019,Jammu Seasonal Hub,Jammu,Jammu And Kashmir,road|staging,18,2028,270,80
+HUB-020,Srinagar Valley Buffer,Srinagar,Jammu And Kashmir,road|staging,25,905,69,92
+HUB-021,Kandla Export Gate,Kandla,Gujarat,road|air|staging,19,1759,138,92
+HUB-022,Mundra Container Interface,Mundra,Gujarat,road|staging,32,1619,161,85
+HUB-023,Ahmedabad Dry Hub,Ahmedabad,Gujarat,road|sea|staging,46,1639,183,93
+HUB-024,Rajkot Distribution Yard,Rajkot,Gujarat,road,12,1044,66,83
+HUB-025,Patna Inland Hub,Patna,Bihar,road,24,1177,93,80
+HUB-026,Ranchi Industrial Crossdock,Ranchi,Jharkhand,road,16,691,127,86
+HUB-027,Jamshedpur Metal Cargo Hub,Jamshedpur,Jharkhand,road|air|staging,46,1916,334,85
+HUB-028,Paradip Port Yard,Paradip,Odisha,road,45,1891,152,82
+HUB-029,Bhubaneswar Sortation Hub,Bhubaneswar,Odisha,road,19,1962,39,97
+HUB-030,Cuttack Food Grade Node,Cuttack,Odisha,road|air|staging,31,1735,322,93
+HUB-031,Mangaluru Coastal Yard,Mangaluru,Karnataka,road,19,351,255,84
+HUB-032,Goa Light Cargo Hub,Goa,Goa,road|staging,46,1326,203,95
+HUB-033,Mysuru Staging Centre,Mysuru,Karnataka,road,44,356,392,93
+HUB-034,Vijayawada Dry Port,Vijayawada,Andhra Pradesh,road|sea|staging,30,757,81,90
+HUB-035,Visakhapatnam Port Connector,Visakhapatnam,Andhra Pradesh,road|staging,11,1276,335,97
+HUB-036,Warangal Parcel Hub,Warangal,Telangana,road|sea|staging,26,1517,413,94
+HUB-037,Lucknow North Hub,Lucknow,Uttar Pradesh,road|air|staging,37,1804,236,94
+HUB-038,Kanpur Industrial Dock,Kanpur,Uttar Pradesh,road|staging,39,1754,419,92
+HUB-039,Bhopal Relay Hub,Bhopal,Madhya Pradesh,road,38,263,175,97
+HUB-040,Surat Export Sort,Surat,Gujarat,road,24,1698,362,97
+HUB-041,Coimbatore Textile Hub,Coimbatore,Tamil Nadu,road|staging,42,435,322,89
+HUB-042,Tuticorin Port Interface,Tuticorin,Tamil Nadu,road|air|staging,11,696,20,97

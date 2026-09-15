@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRightLeft,
   Box,
   CheckCircle2,
   CircleDollarSign,
   Clock3,
+  Database,
   Gauge,
   PackageCheck,
   Plane,
@@ -23,8 +24,8 @@ import {
 } from "lucide-react";
 
 type Mode = "road" | "air" | "sea" | "staging";
-type CorridorId = "northeast" | "west" | "coastal";
-type RetailId = "africa" | "uk" | "saudi";
+type CorridorId = string;
+type RetailId = string;
 
 type ModeCapacity = {
   mode: Mode;
@@ -73,12 +74,39 @@ type ScoredShipment = Shipment & {
   reason: string;
 };
 
+type RetailProfile = {
+  id: RetailId;
+  name: string;
+  terminal: string;
+  passengerMix: string;
+  weeklyFlights: number;
+  baseRevenue: number;
+  compliance: string;
+  assortments: Array<{ label: string; share: number; uplift: number }>;
+};
+
+type BackendSummary = {
+  corridors: number;
+  capacityRows: number;
+  shipments: number;
+  retailProfiles: number;
+  retailAssortments: number;
+  hubs: number;
+  partners: number;
+  totalCapacityTonnes: number;
+};
+
+type DataSource = "loading" | "backend" | "fallback";
+
 const modeMeta = {
   road: { label: "Road", Icon: Truck, className: "mode-road" },
   air: { label: "Air", Icon: Plane, className: "mode-air" },
   sea: { label: "Sea", Icon: Ship, className: "mode-sea" },
   staging: { label: "Staging", Icon: Warehouse, className: "mode-staging" },
 } satisfies Record<Mode, { label: string; Icon: typeof Truck; className: string }>;
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
 
 const corridors: Corridor[] = [
   {
@@ -480,16 +508,7 @@ const retailProfiles = [
       { label: "Prayer and family travel items", share: 13, uplift: 6 },
     ],
   },
-] satisfies Array<{
-  id: RetailId;
-  name: string;
-  terminal: string;
-  passengerMix: string;
-  weeklyFlights: number;
-  baseRevenue: number;
-  compliance: string;
-  assortments: Array<{ label: string; share: number; uplift: number }>;
-}>;
+] satisfies RetailProfile[];
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -644,8 +663,71 @@ export default function Home() {
   const [scenario, setScenario] = useState(1);
   const [selectedRetailId, setSelectedRetailId] = useState<RetailId>("africa");
   const [passengerWave, setPassengerWave] = useState(62);
+  const [corridorData, setCorridorData] = useState<Corridor[]>(corridors);
+  const [retailData, setRetailData] = useState<RetailProfile[]>(retailProfiles);
+  const [backendSummary, setBackendSummary] = useState<BackendSummary | null>(null);
+  const [dataSource, setDataSource] = useState<DataSource>("loading");
 
-  const corridor = corridors.find((item) => item.id === selectedCorridorId) ?? corridors[0];
+  useEffect(() => {
+    let active = true;
+
+    async function loadBackendData() {
+      try {
+        const [corridorResponse, retailResponse, healthResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/corridors`),
+          fetch(`${API_BASE_URL}/api/retail-profiles`),
+          fetch(`${API_BASE_URL}/api/health`),
+        ]);
+
+        if (!corridorResponse.ok || !retailResponse.ok || !healthResponse.ok) {
+          throw new Error("Backend did not return healthy responses");
+        }
+
+        const [loadedCorridors, loadedRetailProfiles, health] = (await Promise.all([
+          corridorResponse.json(),
+          retailResponse.json(),
+          healthResponse.json(),
+        ])) as [Corridor[], RetailProfile[], { dataset: BackendSummary }];
+
+        if (!active) {
+          return;
+        }
+
+        if (loadedCorridors.length) {
+          setCorridorData(loadedCorridors);
+          setSelectedCorridorId((current) =>
+            loadedCorridors.some((item) => item.id === current)
+              ? current
+              : loadedCorridors[0].id,
+          );
+        }
+
+        if (loadedRetailProfiles.length) {
+          setRetailData(loadedRetailProfiles);
+          setSelectedRetailId((current) =>
+            loadedRetailProfiles.some((item) => item.id === current)
+              ? current
+              : loadedRetailProfiles[0].id,
+          );
+        }
+
+        setBackendSummary(health.dataset);
+        setDataSource("backend");
+      } catch {
+        if (active) {
+          setDataSource("fallback");
+        }
+      }
+    }
+
+    loadBackendData();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const corridor = corridorData.find((item) => item.id === selectedCorridorId) ?? corridorData[0];
   const optimization = useMemo(
     () =>
       optimizeCorridor(
@@ -658,7 +740,7 @@ export default function Home() {
       ),
     [corridor, anchorEnabled, anchorMultiplier, maxDetour, guardrail, scenario],
   );
-  const retail = retailProfiles.find((item) => item.id === selectedRetailId) ?? retailProfiles[0];
+  const retail = retailData.find((item) => item.id === selectedRetailId) ?? retailData[0];
   const retailUplift = Math.round(
     retail.assortments.reduce((sum, item) => sum + item.uplift * (item.share / 100), 0) +
       passengerWave / 10,
@@ -698,6 +780,14 @@ export default function Home() {
             <Gauge size={16} />
             {optimization.loadFactor}% return load factor
           </span>
+          <span>
+            <Database size={16} />
+            {dataSource === "backend" && backendSummary
+              ? `${backendSummary.shipments.toLocaleString("en-IN")} CSV shipments`
+              : dataSource === "loading"
+                ? "Connecting CSV backend"
+                : "Sample fallback data"}
+          </span>
         </div>
 
         <div className="view-switch" role="tablist" aria-label="Application view">
@@ -733,7 +823,7 @@ export default function Home() {
             </div>
 
             <div className="corridor-list" aria-label="Corridor selector">
-              {corridors.map((item) => (
+              {corridorData.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -898,7 +988,7 @@ export default function Home() {
               </div>
 
               <div className="match-list">
-                {optimization.accepted.map((match) => {
+                {optimization.accepted.slice(0, 8).map((match) => {
                   const ModeIcon = modeMeta[match.mode].Icon;
 
                   return (
@@ -926,6 +1016,12 @@ export default function Home() {
                   );
                 })}
               </div>
+              {optimization.accepted.length > 8 ? (
+                <p className="list-note">
+                  Showing top 8 of {optimization.accepted.length.toLocaleString("en-IN")} accepted matches from the
+                  active dataset.
+                </p>
+              ) : null}
             </div>
           </section>
 
@@ -1017,7 +1113,7 @@ export default function Home() {
             </div>
 
             <div className="corridor-list">
-              {retailProfiles.map((item) => (
+              {retailData.map((item) => (
                 <button
                   key={item.id}
                   type="button"
