@@ -19,6 +19,12 @@ COMPATIBILITY_FIT = {
     "regulated": 0.74,
     "chilled": 0.42,
 }
+MODE_TARGET_FILL = {
+    "road": 0.93,
+    "air": 0.84,
+    "sea": 0.78,
+    "staging": 0.88,
+}
 
 
 def read_csv_table(name: str) -> list[dict[str, str]]:
@@ -214,11 +220,15 @@ def optimise_corridor(
     guardrail: int,
 ) -> dict[str, Any]:
     anchor_factor = anchor_multiplier if anchor_enabled else 0.54
-    remaining: dict[str, int] = {}
+    available_by_mode: dict[str, int] = {}
+    remaining_bookable: dict[str, int] = {}
 
     for item in corridor["modes"]:
         available_capacity = round(as_int(item["capacity"]) * (as_int(item["available"]) / 100) * anchor_factor)
-        remaining[item["mode"]] = available_capacity
+        target_fill = MODE_TARGET_FILL.get(str(item["mode"]), 0.86)
+        bookable_capacity = round(available_capacity * target_fill) if available_capacity else 0
+        available_by_mode[item["mode"]] = available_capacity
+        remaining_bookable[item["mode"]] = bookable_capacity
 
     scored = []
     for shipment in corridor["shipments"]:
@@ -238,7 +248,7 @@ def optimise_corridor(
 
     for shipment in scored:
         mode = shipment["mode"]
-        mode_remaining = remaining.get(mode, 0)
+        mode_remaining = remaining_bookable.get(mode, 0)
         incompatible = guardrail >= 82 and shipment["compatibility"] in {"chilled", "regulated"}
         detour_blocked = shipment["mode"] != "air" and as_int(shipment["detourKm"]) > max_detour
 
@@ -255,7 +265,7 @@ def optimise_corridor(
             continue
 
         matched_tonnes = min(as_int(shipment["tonnes"]), mode_remaining)
-        remaining[mode] = mode_remaining - matched_tonnes
+        remaining_bookable[mode] = mode_remaining - matched_tonnes
         accepted.append(
             {
                 **shipment,
@@ -286,16 +296,24 @@ def optimise_corridor(
     anchor_tonnes = round(as_int(corridor["baseAnchorTonnes"]) * anchor_factor)
 
     mode_utilisation = []
+    total_remaining: dict[str, int] = {}
     for item in corridor["modes"]:
-        available = round(as_int(item["capacity"]) * (as_int(item["available"]) / 100) * anchor_factor)
-        mode_remaining = remaining.get(item["mode"], 0)
-        used = max(0, available - mode_remaining)
+        mode = str(item["mode"])
+        available = available_by_mode[mode]
+        target_fill = MODE_TARGET_FILL.get(mode, 0.86)
+        bookable_capacity = round(available * target_fill) if available else 0
+        bookable_remaining = remaining_bookable.get(mode, 0)
+        used = max(0, bookable_capacity - bookable_remaining)
+        mode_remaining = max(0, available - used)
+        total_remaining[mode] = mode_remaining
         utilisation = round((used / available) * 100) if available else 0
         mode_utilisation.append(
             {
                 **item,
                 "availableTonnes": available,
+                "bookableTonnes": bookable_capacity,
                 "remainingTonnes": mode_remaining,
+                "reserveTonnes": max(0, available - bookable_capacity),
                 "usedTonnes": used,
                 "utilisation": utilisation,
             }
@@ -304,7 +322,7 @@ def optimise_corridor(
     return {
         "accepted": accepted,
         "declined": declined,
-        "remaining": remaining,
+        "remaining": total_remaining,
         "modeUtilisation": mode_utilisation,
         "adjustedCapacity": adjusted_capacity,
         "matchedTonnes": matched_tonnes,

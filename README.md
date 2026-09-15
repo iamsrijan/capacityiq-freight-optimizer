@@ -215,6 +215,8 @@ The optimiser returns:
 | `declined` | Shipments rejected or queued for review |
 | `remaining` | Remaining tonnes by mode |
 | `modeUtilisation` | Used, remaining, and utilisation by mode |
+| `bookableTonnes` | Tonnes the optimiser is allowed to allocate after operating reserve |
+| `reserveTonnes` | Capacity held back for service reliability, slot risk, and operational buffer |
 | `matchedTonnes` | Total tonnes matched |
 | `revenue` | Estimated revenue unlocked |
 | `emptyKmAvoided` | Empty kilometres avoided |
@@ -234,6 +236,8 @@ The frontend starts with embedded sample data so the app can still open if the b
 After loading succeeds, the top status bar shows the CSV shipment count. Freight controls act as draft network inputs. When the user selects Run optimiser, the frontend posts the visible corridor, anchor, detour, and guardrail settings to `/api/optimise`. The backend returns the displayed accepted matches, rejected queue, mode utilisation, revenue, empty kilometres avoided, cost saved, load factor, and unit cost impact.
 
 If backend loading or backend optimisation fails, the app displays fallback status text and continues to work with the smaller embedded browser-side model.
+
+Capacity Inventory bars show matched tonnes against operationally available capacity. The backend also keeps mode-specific reserves, so road, air, sea, and staging do not automatically show 100% utilisation just because demand exists.
 
 ## Project Architecture
 

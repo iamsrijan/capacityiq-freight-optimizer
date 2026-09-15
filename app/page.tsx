@@ -101,7 +101,9 @@ type OptimizationSource = "loading" | "backend" | "browser-fallback";
 
 type ModeUtilizationResult = ModeCapacity & {
   availableTonnes: number;
+  bookableTonnes?: number;
   remainingTonnes: number;
+  reserveTonnes?: number;
   usedTonnes: number;
   utilisation: number;
 };
@@ -153,6 +155,13 @@ const modeMeta = {
   sea: { label: "Sea", Icon: Ship, className: "mode-sea" },
   staging: { label: "Staging", Icon: Warehouse, className: "mode-staging" },
 } satisfies Record<Mode, { label: string; Icon: typeof Truck; className: string }>;
+
+const modeTargetFill: Record<Mode, number> = {
+  road: 0.93,
+  air: 0.84,
+  sea: 0.78,
+  staging: 0.88,
+};
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
@@ -611,11 +620,14 @@ function optimizeCorridor(
   guardrail: number,
 ): OptimizationResult {
   const anchorFactor = anchorEnabled ? anchorMultiplier : 0.54;
-  const remaining = new Map<Mode, number>();
+  const availableByMode = new Map<Mode, number>();
+  const remainingBookable = new Map<Mode, number>();
 
   corridor.modes.forEach((item) => {
     const availableCapacity = Math.round(item.capacity * (item.available / 100) * anchorFactor);
-    remaining.set(item.mode, availableCapacity);
+    const bookableCapacity = availableCapacity ? Math.round(availableCapacity * modeTargetFill[item.mode]) : 0;
+    availableByMode.set(item.mode, availableCapacity);
+    remainingBookable.set(item.mode, bookableCapacity);
   });
 
   const scored = corridor.shipments
@@ -632,7 +644,7 @@ function optimizeCorridor(
   const threshold = Math.max(55, guardrail - 12);
 
   scored.forEach((shipment) => {
-    const modeRemaining = remaining.get(shipment.mode) ?? 0;
+    const modeRemaining = remainingBookable.get(shipment.mode) ?? 0;
     const incompatible =
       guardrail >= 82 &&
       (shipment.compatibility === "chilled" || shipment.compatibility === "regulated");
@@ -654,7 +666,7 @@ function optimizeCorridor(
     }
 
     const matchedTonnes = Math.min(shipment.tonnes, modeRemaining);
-    remaining.set(shipment.mode, modeRemaining - matchedTonnes);
+    remainingBookable.set(shipment.mode, modeRemaining - matchedTonnes);
     accepted.push({
       ...shipment,
       matchedTonnes,
@@ -682,11 +694,20 @@ function optimizeCorridor(
   const baselineLoadFactor = anchorEnabled ? 19 : 11;
   const unitCostDrop = Math.max(0, Math.min(34, Math.round((loadFactor - baselineLoadFactor) * 0.62)));
   const anchorTonnes = Math.round(corridor.baseAnchorTonnes * anchorFactor);
+  const totalRemaining = new Map<Mode, number>();
+
+  corridor.modes.forEach((item) => {
+    const availableCapacity = availableByMode.get(item.mode) ?? 0;
+    const bookableCapacity = availableCapacity ? Math.round(availableCapacity * modeTargetFill[item.mode]) : 0;
+    const bookableRemaining = remainingBookable.get(item.mode) ?? 0;
+    const usedCapacity = Math.max(0, bookableCapacity - bookableRemaining);
+    totalRemaining.set(item.mode, Math.max(0, availableCapacity - usedCapacity));
+  });
 
   return {
     accepted,
     declined,
-    remaining: Object.fromEntries(remaining) as Partial<Record<Mode, number>>,
+    remaining: Object.fromEntries(totalRemaining) as Partial<Record<Mode, number>>,
     adjustedCapacity,
     matchedTonnes,
     revenue,
