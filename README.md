@@ -37,7 +37,7 @@ The core thesis is simple:
 
 | Marker | Area | What It Does |
 | --- | --- | --- |
-| 1 | Run optimiser | Refreshes the scenario score |
+| 1 | Run optimiser | Applies the visible network inputs and requests a backend optimisation run |
 | 2 | Recommended Matches | Shows the strongest cargo matches from the active dataset |
 | 3 | Guardrail Queue | Shows shipments rejected or flagged for review |
 
@@ -105,7 +105,7 @@ The app uses these backend calls:
 | App loads | `GET http://127.0.0.1:8000/api/corridors` |
 | App loads | `GET http://127.0.0.1:8000/api/retail-profiles` |
 | App loads | `GET http://127.0.0.1:8000/api/health` |
-| Freight corridor or slider changes | `POST http://127.0.0.1:8000/api/optimise` |
+| Select Run optimiser after changing freight inputs | `POST http://127.0.0.1:8000/api/optimise` |
 
 You can also verify this in the browser developer tools under the Network tab, or by opening the backend health endpoint directly:
 
@@ -201,8 +201,7 @@ curl -X POST http://127.0.0.1:8000/api/optimise \
     "anchorEnabled": true,
     "anchorMultiplier": 1,
     "maxDetour": 120,
-    "guardrail": 74,
-    "scenario": 1
+    "guardrail": 74
   }'
 ```
 
@@ -222,7 +221,7 @@ The optimiser returns:
 | `costSaved` | Operating cost avoided |
 | `loadFactor` | Return capacity load factor |
 | `unitCostDrop` | Estimated freight unit cost reduction |
-| `anchorTonnes` | Anchor demand volume used in the scenario |
+| `anchorTonnes` | Anchor demand volume used in the optimiser run |
 
 ## Frontend Data Flow
 
@@ -232,7 +231,7 @@ The frontend starts with embedded sample data so the app can still open if the b
 2. `/api/retail-profiles`
 3. `/api/health`
 
-After loading succeeds, the top status bar shows the CSV shipment count. When a freight scenario changes, the frontend posts the current corridor and slider settings to `/api/optimise`. The backend returns the displayed accepted matches, rejected queue, mode utilisation, revenue, empty kilometres avoided, cost saved, load factor, and unit cost impact.
+After loading succeeds, the top status bar shows the CSV shipment count. Freight controls act as draft network inputs. When the user selects Run optimiser, the frontend posts the visible corridor, anchor, detour, and guardrail settings to `/api/optimise`. The backend returns the displayed accepted matches, rejected queue, mode utilisation, revenue, empty kilometres avoided, cost saved, load factor, and unit cost impact.
 
 If backend loading or backend optimisation fails, the app displays fallback status text and continues to work with the smaller embedded browser-side model.
 
@@ -273,7 +272,7 @@ capacityiq-freight-optimizer/
 | --- | --- | --- | --- |
 | `Home` | `app/page.tsx` | React page runtime | Owns screen state, loads backend data, chooses Freight or Airport retail view, and renders the dashboard |
 | `useEffect(loadBackendData)` | `app/page.tsx` | `Home` | Fetches CSV-backed corridors, retail profiles, and dataset counts from the backend |
-| `useEffect(loadBackendOptimization)` | `app/page.tsx` | `Home` | Posts the active freight scenario to `/api/optimise` and stores backend-calculated results |
+| `useEffect(loadBackendOptimization)` | `app/page.tsx` | `Home` | Posts the applied freight inputs to `/api/optimise` and stores backend-calculated results |
 | `scoreShipment` | `app/page.tsx` | `optimizeCorridor` | Browser fallback scoring only, used if the backend is unavailable |
 | `optimizeCorridor` | `app/page.tsx` | `Home` through `useMemo` | Browser fallback optimiser only, used if the backend is unavailable |
 | `formatCurrency` | `app/page.tsx` | Metric and row render logic | Formats rupee values in Indian currency style |
@@ -308,12 +307,12 @@ capacityiq-freight-optimizer/
 
 | User Action | Frontend State Or Function | Result |
 | --- | --- | --- |
-| Select a freight corridor | `setSelectedCorridorId` | Changes corridor, capacity, shipment pool, route labels, and KPI results |
-| Toggle Britannia anchor | `setAnchorEnabled` | Changes baseline density and available matching capacity |
-| Move Anchor volume | `setAnchorMultiplier` | Changes anchor tonnes and recalculates match results |
-| Move Max detour | `setMaxDetour` | Makes route matching stricter or more flexible |
-| Move Compatibility guardrail | `setGuardrail` | Moves riskier cargo into or out of the guardrail queue |
-| Select Run optimiser | `setScenario` | Refreshes the scoring nudge and recalculates matches |
+| Select a freight corridor | `setSelectedCorridorId` | Updates the draft corridor input |
+| Toggle Britannia anchor | `setAnchorEnabled` | Updates the draft anchor setting |
+| Move Anchor volume | `setAnchorMultiplier` | Updates the draft anchor tonnes assumption |
+| Move Max detour | `setMaxDetour` | Updates the draft route flexibility policy |
+| Move Compatibility guardrail | `setGuardrail` | Updates the draft compatibility threshold |
+| Select Run optimiser | `setAppliedNetworkInputs` | Applies the visible draft inputs and requests backend optimisation |
 | Switch to Airport retail | `setView` | Shows the retail optimisation workspace |
 | Select a retail route cluster | `setSelectedRetailId` | Changes product allocation and passenger profile |
 | Move Passenger signal | `setPassengerWave` | Changes sales uplift and optimised revenue estimate |

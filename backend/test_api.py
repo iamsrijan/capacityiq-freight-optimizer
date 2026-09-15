@@ -33,7 +33,6 @@ class CapacityIQBackendTest(unittest.TestCase):
             anchor_multiplier=1.0,
             max_detour=120,
             guardrail=74,
-            scenario=1,
         )
 
         self.assertGreater(result["matchedTonnes"], 0)

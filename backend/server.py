@@ -188,7 +188,6 @@ def score_shipment(
     shipment: dict[str, Any],
     max_detour: int,
     guardrail: int,
-    scenario: int,
 ) -> int:
     route_fit = max(0, 1 - as_int(shipment["detourKm"]) / max(max_detour, 1))
     reliability_fit = as_int(shipment["reliability"]) / 100
@@ -196,7 +195,6 @@ def score_shipment(
     urgency_fit = as_int(shipment["urgency"]) / 100
     compatibility_fit = COMPATIBILITY_FIT.get(str(shipment["compatibility"]), 0.5)
     guardrail_penalty = ((guardrail - 50) / 50) * (1 - compatibility_fit) * 22
-    scenario_nudge = ((scenario + ord(str(shipment["id"])[-1])) % 5) - 2
 
     return round(
         route_fit * 32
@@ -205,7 +203,6 @@ def score_shipment(
         + revenue_fit * 15
         + urgency_fit * 7
         - guardrail_penalty
-        + scenario_nudge
     )
 
 
@@ -215,7 +212,6 @@ def optimise_corridor(
     anchor_multiplier: float,
     max_detour: int,
     guardrail: int,
-    scenario: int,
 ) -> dict[str, Any]:
     anchor_factor = anchor_multiplier if anchor_enabled else 0.54
     remaining: dict[str, int] = {}
@@ -229,7 +225,7 @@ def optimise_corridor(
         scored.append(
             {
                 **shipment,
-                "score": score_shipment(shipment, max_detour, guardrail, scenario),
+                "score": score_shipment(shipment, max_detour, guardrail),
                 "matchedTonnes": 0,
                 "reason": "",
             }
@@ -476,7 +472,6 @@ class CapacityIQHandler(BaseHTTPRequestHandler):
             as_float(payload.get("anchorMultiplier", 1), 1),
             as_int(payload.get("maxDetour", 120), 120),
             as_int(payload.get("guardrail", 74), 74),
-            as_int(payload.get("scenario", 1), 1),
         )
         self._send_json(200, {"corridor": corridor, "result": result})
 

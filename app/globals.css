@@ -342,6 +342,12 @@ button {
   font-weight: 760;
 }
 
+.primary-action:disabled {
+  cursor: not-allowed;
+  background: #78827d;
+  color: rgb(255 255 255 / 82%);
+}
+
 .main-board {
   display: grid;
   gap: 16px;

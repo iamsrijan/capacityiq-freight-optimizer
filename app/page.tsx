@@ -121,6 +121,32 @@ type OptimizationResult = {
   anchorTonnes: number;
 };
 
+type NetworkInputs = {
+  corridorId: CorridorId;
+  anchorEnabled: boolean;
+  anchorMultiplier: number;
+  maxDetour: number;
+  guardrail: number;
+};
+
+const initialNetworkInputs: NetworkInputs = {
+  corridorId: "northeast",
+  anchorEnabled: true,
+  anchorMultiplier: 1,
+  maxDetour: 120,
+  guardrail: 74,
+};
+
+function sameNetworkInputs(first: NetworkInputs, second: NetworkInputs) {
+  return (
+    first.corridorId === second.corridorId &&
+    first.anchorEnabled === second.anchorEnabled &&
+    first.anchorMultiplier === second.anchorMultiplier &&
+    first.maxDetour === second.maxDetour &&
+    first.guardrail === second.guardrail
+  );
+}
+
 const modeMeta = {
   road: { label: "Road", Icon: Truck, className: "mode-road" },
   air: { label: "Air", Icon: Plane, className: "mode-air" },
@@ -552,7 +578,6 @@ function scoreShipment(
   shipment: Shipment,
   maxDetour: number,
   guardrail: number,
-  scenario: number,
 ) {
   const routeFit = Math.max(0, 1 - shipment.detourKm / Math.max(maxDetour, 1));
   const reliabilityFit = shipment.reliability / 100;
@@ -567,7 +592,6 @@ function scoreShipment(
           ? 0.74
           : 0.42;
   const guardrailPenalty = ((guardrail - 50) / 50) * (1 - compatibilityFit) * 22;
-  const scenarioNudge = ((scenario + shipment.id.charCodeAt(shipment.id.length - 1)) % 5) - 2;
 
   return Math.round(
     routeFit * 32 +
@@ -575,8 +599,7 @@ function scoreShipment(
       compatibilityFit * 22 +
       revenueFit * 15 +
       urgencyFit * 7 -
-      guardrailPenalty +
-      scenarioNudge,
+      guardrailPenalty,
   );
 }
 
@@ -586,7 +609,6 @@ function optimizeCorridor(
   anchorMultiplier: number,
   maxDetour: number,
   guardrail: number,
-  scenario: number,
 ): OptimizationResult {
   const anchorFactor = anchorEnabled ? anchorMultiplier : 0.54;
   const remaining = new Map<Mode, number>();
@@ -599,7 +621,7 @@ function optimizeCorridor(
   const scored = corridor.shipments
     .map((shipment) => ({
       ...shipment,
-      score: scoreShipment(shipment, maxDetour, guardrail, scenario),
+      score: scoreShipment(shipment, maxDetour, guardrail),
       matchedTonnes: 0,
       reason: "",
     }))
@@ -678,12 +700,15 @@ function optimizeCorridor(
 
 export default function Home() {
   const [view, setView] = useState<"network" | "retail">("network");
-  const [selectedCorridorId, setSelectedCorridorId] = useState<CorridorId>("northeast");
-  const [anchorEnabled, setAnchorEnabled] = useState(true);
-  const [anchorMultiplier, setAnchorMultiplier] = useState(1);
-  const [maxDetour, setMaxDetour] = useState(120);
-  const [guardrail, setGuardrail] = useState(74);
-  const [scenario, setScenario] = useState(1);
+  const [selectedCorridorId, setSelectedCorridorId] = useState<CorridorId>(
+    initialNetworkInputs.corridorId,
+  );
+  const [anchorEnabled, setAnchorEnabled] = useState(initialNetworkInputs.anchorEnabled);
+  const [anchorMultiplier, setAnchorMultiplier] = useState(initialNetworkInputs.anchorMultiplier);
+  const [maxDetour, setMaxDetour] = useState(initialNetworkInputs.maxDetour);
+  const [guardrail, setGuardrail] = useState(initialNetworkInputs.guardrail);
+  const [appliedNetworkInputs, setAppliedNetworkInputs] =
+    useState<NetworkInputs>(initialNetworkInputs);
   const [selectedRetailId, setSelectedRetailId] = useState<RetailId>("africa");
   const [passengerWave, setPassengerWave] = useState(62);
   const [corridorData, setCorridorData] = useState<Corridor[]>(corridors);
@@ -726,6 +751,11 @@ export default function Home() {
               ? current
               : loadedCorridors[0].id,
           );
+          setAppliedNetworkInputs((current) =>
+            loadedCorridors.some((item) => item.id === current.corridorId)
+              ? current
+              : { ...current, corridorId: loadedCorridors[0].id },
+          );
         }
 
         if (loadedRetailProfiles.length) {
@@ -753,18 +783,29 @@ export default function Home() {
     };
   }, []);
 
-  const corridor = corridorData.find((item) => item.id === selectedCorridorId) ?? corridorData[0];
+  const draftNetworkInputs = useMemo(
+    () => ({
+      corridorId: selectedCorridorId,
+      anchorEnabled,
+      anchorMultiplier,
+      maxDetour,
+      guardrail,
+    }),
+    [selectedCorridorId, anchorEnabled, anchorMultiplier, maxDetour, guardrail],
+  );
+  const hasPendingNetworkInputs = !sameNetworkInputs(draftNetworkInputs, appliedNetworkInputs);
+  const draftCorridor = corridorData.find((item) => item.id === selectedCorridorId) ?? corridorData[0];
+  const corridor = corridorData.find((item) => item.id === appliedNetworkInputs.corridorId) ?? draftCorridor;
   const fallbackOptimization = useMemo(
     () =>
       optimizeCorridor(
         corridor,
-        anchorEnabled,
-        anchorMultiplier,
-        maxDetour,
-        guardrail,
-        scenario,
+        appliedNetworkInputs.anchorEnabled,
+        appliedNetworkInputs.anchorMultiplier,
+        appliedNetworkInputs.maxDetour,
+        appliedNetworkInputs.guardrail,
       ),
-    [corridor, anchorEnabled, anchorMultiplier, maxDetour, guardrail, scenario],
+    [corridor, appliedNetworkInputs],
   );
   const optimization = backendOptimization ?? fallbackOptimization;
 
@@ -792,12 +833,11 @@ export default function Home() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            corridorId: selectedCorridorId,
-            anchorEnabled,
-            anchorMultiplier,
-            maxDetour,
-            guardrail,
-            scenario,
+            corridorId: appliedNetworkInputs.corridorId,
+            anchorEnabled: appliedNetworkInputs.anchorEnabled,
+            anchorMultiplier: appliedNetworkInputs.anchorMultiplier,
+            maxDetour: appliedNetworkInputs.maxDetour,
+            guardrail: appliedNetworkInputs.guardrail,
           }),
         });
 
@@ -826,12 +866,7 @@ export default function Home() {
     };
   }, [
     dataSource,
-    selectedCorridorId,
-    anchorEnabled,
-    anchorMultiplier,
-    maxDetour,
-    guardrail,
-    scenario,
+    appliedNetworkInputs,
   ]);
 
   const retail = retailData.find((item) => item.id === selectedRetailId) ?? retailData[0];
@@ -845,7 +880,11 @@ export default function Home() {
     const backendMode = optimization.modeUtilisation?.find((mode) => mode.mode === item.mode);
     const available =
       backendMode?.availableTonnes ??
-      Math.round(item.capacity * (item.available / 100) * (anchorEnabled ? anchorMultiplier : 0.54));
+      Math.round(
+        item.capacity *
+          (item.available / 100) *
+          (appliedNetworkInputs.anchorEnabled ? appliedNetworkInputs.anchorMultiplier : 0.54),
+      );
     const remaining = backendMode?.remainingTonnes ?? optimization.remaining[item.mode] ?? 0;
     const used = backendMode?.usedTonnes ?? Math.max(0, available - remaining);
     const utilization = backendMode?.utilisation ?? (available ? Math.round((used / available) * 100) : 0);
@@ -869,7 +908,9 @@ export default function Home() {
         <div className="topline-status" aria-label="Current network status">
           <span>
             <CheckCircle2 size={16} />
-            Britannia anchor demand active
+            {appliedNetworkInputs.anchorEnabled
+              ? "Britannia anchor demand active"
+              : "Anchor demand reduced"}
           </span>
           <span>
             <Gauge size={16} />
@@ -942,7 +983,7 @@ export default function Home() {
             <label className="toggle-row">
               <span>
                 <strong>Britannia anchor</strong>
-                <small>{corridor.anchor}</small>
+                <small>{draftCorridor.anchor}</small>
               </span>
               <input
                 type="checkbox"
@@ -999,10 +1040,11 @@ export default function Home() {
             <button
               type="button"
               className="primary-action"
-              onClick={() => setScenario((value) => value + 1)}
+              onClick={() => setAppliedNetworkInputs(draftNetworkInputs)}
+              disabled={!hasPendingNetworkInputs}
             >
               <RefreshCw size={17} />
-              Run optimiser
+              {hasPendingNetworkInputs ? "Run optimiser" : "Optimiser current"}
             </button>
           </aside>
 
