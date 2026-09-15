@@ -326,7 +326,7 @@ def dataset_summary() -> dict[str, Any]:
     return {
         **counts,
         "api": "CapacityIQ local backend",
-        "dataDirectory": str(DATA_DIR),
+        "dataDirectory": "backend/data",
         "totalCapacityTonnes": sum(
             as_int(mode["capacity"])
             for corridor in DATASET["corridors"]

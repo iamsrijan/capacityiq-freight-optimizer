@@ -97,6 +97,29 @@ type BackendSummary = {
 };
 
 type DataSource = "loading" | "backend" | "fallback";
+type OptimizationSource = "loading" | "backend" | "browser-fallback";
+
+type ModeUtilizationResult = ModeCapacity & {
+  availableTonnes: number;
+  remainingTonnes: number;
+  usedTonnes: number;
+  utilisation: number;
+};
+
+type OptimizationResult = {
+  accepted: ScoredShipment[];
+  declined: ScoredShipment[];
+  remaining: Partial<Record<Mode, number>>;
+  modeUtilisation?: ModeUtilizationResult[];
+  adjustedCapacity: number;
+  matchedTonnes: number;
+  revenue: number;
+  emptyKmAvoided: number;
+  costSaved: number;
+  loadFactor: number;
+  unitCostDrop: number;
+  anchorTonnes: number;
+};
 
 const modeMeta = {
   road: { label: "Road", Icon: Truck, className: "mode-road" },
@@ -564,7 +587,7 @@ function optimizeCorridor(
   maxDetour: number,
   guardrail: number,
   scenario: number,
-) {
+): OptimizationResult {
   const anchorFactor = anchorEnabled ? anchorMultiplier : 0.54;
   const remaining = new Map<Mode, number>();
 
@@ -641,7 +664,7 @@ function optimizeCorridor(
   return {
     accepted,
     declined,
-    remaining,
+    remaining: Object.fromEntries(remaining) as Partial<Record<Mode, number>>,
     adjustedCapacity,
     matchedTonnes,
     revenue,
@@ -667,6 +690,9 @@ export default function Home() {
   const [retailData, setRetailData] = useState<RetailProfile[]>(retailProfiles);
   const [backendSummary, setBackendSummary] = useState<BackendSummary | null>(null);
   const [dataSource, setDataSource] = useState<DataSource>("loading");
+  const [backendOptimization, setBackendOptimization] = useState<OptimizationResult | null>(null);
+  const [optimizationSource, setOptimizationSource] =
+    useState<OptimizationSource>("browser-fallback");
 
   useEffect(() => {
     let active = true;
@@ -728,7 +754,7 @@ export default function Home() {
   }, []);
 
   const corridor = corridorData.find((item) => item.id === selectedCorridorId) ?? corridorData[0];
-  const optimization = useMemo(
+  const fallbackOptimization = useMemo(
     () =>
       optimizeCorridor(
         corridor,
@@ -740,6 +766,74 @@ export default function Home() {
       ),
     [corridor, anchorEnabled, anchorMultiplier, maxDetour, guardrail, scenario],
   );
+  const optimization = backendOptimization ?? fallbackOptimization;
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadBackendOptimization() {
+      await Promise.resolve();
+
+      if (!active) {
+        return;
+      }
+
+      if (dataSource !== "backend") {
+        setBackendOptimization(null);
+        setOptimizationSource(dataSource === "loading" ? "loading" : "browser-fallback");
+        return;
+      }
+
+      setBackendOptimization(null);
+      setOptimizationSource("loading");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/optimise`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            corridorId: selectedCorridorId,
+            anchorEnabled,
+            anchorMultiplier,
+            maxDetour,
+            guardrail,
+            scenario,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Backend optimiser did not return a successful response");
+        }
+
+        const payload = (await response.json()) as { result: OptimizationResult };
+
+        if (active) {
+          setBackendOptimization(payload.result);
+          setOptimizationSource("backend");
+        }
+      } catch {
+        if (active) {
+          setBackendOptimization(null);
+          setOptimizationSource("browser-fallback");
+        }
+      }
+    }
+
+    loadBackendOptimization();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    dataSource,
+    selectedCorridorId,
+    anchorEnabled,
+    anchorMultiplier,
+    maxDetour,
+    guardrail,
+    scenario,
+  ]);
+
   const retail = retailData.find((item) => item.id === selectedRetailId) ?? retailData[0];
   const retailUplift = Math.round(
     retail.assortments.reduce((sum, item) => sum + item.uplift * (item.share / 100), 0) +
@@ -748,12 +842,13 @@ export default function Home() {
   const retailRevenue = Math.round(retail.baseRevenue * (1 + retailUplift / 100));
   const totalCapacity = corridor.modes.reduce((sum, item) => sum + item.capacity, 0);
   const modeUtilization = corridor.modes.map((item) => {
-    const available = Math.round(
-      item.capacity * (item.available / 100) * (anchorEnabled ? anchorMultiplier : 0.54),
-    );
-    const remaining = optimization.remaining.get(item.mode) ?? 0;
-    const used = Math.max(0, available - remaining);
-    const utilization = available ? Math.round((used / available) * 100) : 0;
+    const backendMode = optimization.modeUtilisation?.find((mode) => mode.mode === item.mode);
+    const available =
+      backendMode?.availableTonnes ??
+      Math.round(item.capacity * (item.available / 100) * (anchorEnabled ? anchorMultiplier : 0.54));
+    const remaining = backendMode?.remainingTonnes ?? optimization.remaining[item.mode] ?? 0;
+    const used = backendMode?.usedTonnes ?? Math.max(0, available - remaining);
+    const utilization = backendMode?.utilisation ?? (available ? Math.round((used / available) * 100) : 0);
 
     return { ...item, available, remaining, used, utilization };
   });
@@ -787,6 +882,14 @@ export default function Home() {
               : dataSource === "loading"
                 ? "Connecting CSV backend"
                 : "Sample fallback data"}
+          </span>
+          <span>
+            <RefreshCw size={16} />
+            {optimizationSource === "backend"
+              ? "Backend optimiser active"
+              : optimizationSource === "loading"
+                ? "Calling /api/optimise"
+                : "Browser fallback optimiser"}
           </span>
         </div>
 

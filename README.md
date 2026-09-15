@@ -55,16 +55,16 @@ The core thesis is simple:
 
 ## Local Setup
 
-The project lives at:
+Clone the project into any folder on your machine or server:
 
 ```bash
-/Users/srijan/Downloads/capacityiq-freight-optimizer
+git clone https://github.com/iamsrijan/capacityiq-freight-optimizer.git
+cd capacityiq-freight-optimizer
 ```
 
 Run the full local stack:
 
 ```bash
-cd /Users/srijan/Downloads/capacityiq-freight-optimizer
 npm install
 npm run dev
 ```
@@ -81,6 +81,37 @@ The `npm run dev` command starts both:
 | --- | --- | --- |
 | Frontend | `http://localhost:3000/` | React dashboard |
 | Backend | `http://127.0.0.1:8000/` | CSV-backed API and optimiser |
+
+### Why The Browser URL Stays On Port 3000
+
+The browser address bar shows the frontend route, so it normally stays at:
+
+```bash
+http://localhost:3000/
+```
+
+That does not mean the backend is unused. The React app calls the backend in the background using `fetch()`. These API calls do not navigate the browser to a new page, so the address bar does not change.
+
+When the backend is running, the top status bar shows:
+
+```text
+Backend optimiser active
+```
+
+The app uses these backend calls:
+
+| Frontend Action | Backend Call |
+| --- | --- |
+| App loads | `GET http://127.0.0.1:8000/api/corridors` |
+| App loads | `GET http://127.0.0.1:8000/api/retail-profiles` |
+| App loads | `GET http://127.0.0.1:8000/api/health` |
+| Freight corridor or slider changes | `POST http://127.0.0.1:8000/api/optimise` |
+
+You can also verify this in the browser developer tools under the Network tab, or by opening the backend health endpoint directly:
+
+```bash
+http://127.0.0.1:8000/api/health
+```
 
 ## Other Useful Commands
 
@@ -201,14 +232,16 @@ The frontend starts with embedded sample data so the app can still open if the b
 2. `/api/retail-profiles`
 3. `/api/health`
 
-After loading succeeds, the top status bar shows the CSV shipment count. If loading fails, the app displays `Sample fallback data` and continues to work with the smaller embedded dataset.
+After loading succeeds, the top status bar shows the CSV shipment count. When a freight scenario changes, the frontend posts the current corridor and slider settings to `/api/optimise`. The backend returns the displayed accepted matches, rejected queue, mode utilisation, revenue, empty kilometres avoided, cost saved, load factor, and unit cost impact.
+
+If backend loading or backend optimisation fails, the app displays fallback status text and continues to work with the smaller embedded browser-side model.
 
 ## Project Architecture
 
 ```text
 capacityiq-freight-optimizer/
   app/
-    page.tsx              Frontend screen, UI state, fallback data, scoring logic
+    page.tsx              Frontend screen, UI state, API loading, fallback data
     layout.tsx            Root app shell and metadata
     globals.css           Dashboard styling and responsive layout
   backend/
@@ -240,8 +273,9 @@ capacityiq-freight-optimizer/
 | --- | --- | --- | --- |
 | `Home` | `app/page.tsx` | React page runtime | Owns screen state, loads backend data, chooses Freight or Airport retail view, and renders the dashboard |
 | `useEffect(loadBackendData)` | `app/page.tsx` | `Home` | Fetches CSV-backed corridors, retail profiles, and dataset counts from the backend |
-| `scoreShipment` | `app/page.tsx` | `optimizeCorridor` | Scores each shipment using route fit, reliability, revenue, urgency, compatibility, and guardrail penalty |
-| `optimizeCorridor` | `app/page.tsx` | `Home` through `useMemo` | Runs the browser-side optimiser for immediate dashboard updates |
+| `useEffect(loadBackendOptimization)` | `app/page.tsx` | `Home` | Posts the active freight scenario to `/api/optimise` and stores backend-calculated results |
+| `scoreShipment` | `app/page.tsx` | `optimizeCorridor` | Browser fallback scoring only, used if the backend is unavailable |
+| `optimizeCorridor` | `app/page.tsx` | `Home` through `useMemo` | Browser fallback optimiser only, used if the backend is unavailable |
 | `formatCurrency` | `app/page.tsx` | Metric and row render logic | Formats rupee values in Indian currency style |
 | `formatShortCurrency` | `app/page.tsx` | Metric cards | Shortens currency into lakh and crore labels |
 | `Metric` | `app/page.tsx` | `Home` | Reusable KPI card component |
@@ -318,4 +352,3 @@ Expected result:
 | Build | Frontend build completes |
 | API tables | JSON table counts are returned |
 | Frontend page | HTTP `200 OK` |
-
