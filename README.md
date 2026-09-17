@@ -244,11 +244,26 @@ Capacity Inventory bars show matched tonnes against operationally available capa
 ```text
 capacityiq-freight-optimizer/
   app/
-    page.tsx              Frontend screen, UI state, API loading, fallback data
+    page.tsx              Frontend screen orchestration and view layout
+    components/
+      Metric.tsx          Reusable KPI card component
+    data/
+      fallback-data.ts    Browser fallback corridors and retail profiles
+    lib/
+      api.ts              Backend API client functions
+      config.ts           Frontend constants and initial network inputs
+      formatters.ts       Currency and short-number formatting helpers
+      mode-meta.ts        Mode labels, icons, and CSS class names
+      optimizer.ts        Browser fallback optimiser
+      types.ts            Shared frontend domain types
     layout.tsx            Root app shell and metadata
     globals.css           Dashboard styling and responsive layout
   backend/
-    server.py             Local Python API and optimiser
+    config.py             Backend constants, endpoints, and mode reserve settings
+    repository.py         CSV loading and dataset lookup functions
+    optimizer.py          Freight scoring and capacity allocation logic
+    server.py             Thin local HTTP API entrypoint
+    utils.py              Parsing, pagination, and numeric conversion helpers
     test_api.py           Backend tests
     data/
       corridors.csv
@@ -275,24 +290,27 @@ capacityiq-freight-optimizer/
 | Function Or Object | File | Called By | Purpose |
 | --- | --- | --- | --- |
 | `Home` | `app/page.tsx` | React page runtime | Owns screen state, loads backend data, chooses Freight or Airport retail view, and renders the dashboard |
-| `useEffect(loadBackendData)` | `app/page.tsx` | `Home` | Fetches CSV-backed corridors, retail profiles, and dataset counts from the backend |
-| `useEffect(loadBackendOptimization)` | `app/page.tsx` | `Home` | Posts the applied freight inputs to `/api/optimise` and stores backend-calculated results |
-| `scoreShipment` | `app/page.tsx` | `optimizeCorridor` | Browser fallback scoring only, used if the backend is unavailable |
-| `optimizeCorridor` | `app/page.tsx` | `Home` through `useMemo` | Browser fallback optimiser only, used if the backend is unavailable |
-| `formatCurrency` | `app/page.tsx` | Metric and row render logic | Formats rupee values in Indian currency style |
-| `formatShortCurrency` | `app/page.tsx` | Metric cards | Shortens currency into lakh and crore labels |
-| `Metric` | `app/page.tsx` | `Home` | Reusable KPI card component |
+| `useEffect(loadBackendData)` | `app/page.tsx` | `Home` | Calls `fetchInitialDashboardData` and stores loaded CSV-backed data |
+| `useEffect(loadBackendOptimization)` | `app/page.tsx` | `Home` | Calls `fetchBackendOptimization` for the applied freight inputs |
+| `fetchInitialDashboardData` | `app/lib/api.ts` | `Home` | Fetches corridors, retail profiles, and dataset health |
+| `fetchBackendOptimization` | `app/lib/api.ts` | `Home` | Posts the applied freight inputs to `/api/optimise` |
+| `scoreShipment` | `app/lib/optimizer.ts` | `optimizeCorridor` | Browser fallback scoring only, used if the backend is unavailable |
+| `optimizeCorridor` | `app/lib/optimizer.ts` | `Home` through `useMemo` | Browser fallback optimiser only, used if the backend is unavailable |
+| `formatCurrency` | `app/lib/formatters.ts` | Metric and row render logic | Formats rupee values in Indian currency style |
+| `formatShortCurrency` | `app/lib/formatters.ts` | Metric cards | Shortens currency into lakh and crore labels |
+| `Metric` | `app/components/Metric.tsx` | `Home` | Reusable KPI card component |
+| `corridors`, `retailProfiles` | `app/data/fallback-data.ts` | `Home` | Local fallback data used when the backend is unavailable |
 
 ### Backend Functions
 
 | Function Or Object | File | Called By | Purpose |
 | --- | --- | --- | --- |
-| `read_csv_table` | `backend/server.py` | `load_dataset` | Reads a CSV table from `backend/data` |
-| `load_dataset` | `backend/server.py` | Server startup and tests | Loads all CSV tables and converts them into API-ready objects |
-| `score_shipment` | `backend/server.py` | `optimise_corridor` | Scores shipment candidates using the backend version of the scoring logic |
-| `optimise_corridor` | `backend/server.py` | `POST /api/optimise` | Accepts, declines, and measures candidate shipments for one corridor |
-| `dataset_summary` | `backend/server.py` | `/api/health` and `/api/tables` | Returns table counts and total scanned capacity |
-| `find_corridor` | `backend/server.py` | Corridor endpoints and optimiser endpoint | Looks up a corridor by ID |
+| `read_csv_table` | `backend/repository.py` | `load_dataset` | Reads a CSV table from `backend/data` |
+| `load_dataset` | `backend/repository.py` | Repository startup and tests | Loads all CSV tables and converts them into API-ready objects |
+| `score_shipment` | `backend/optimizer.py` | `optimise_corridor` | Scores shipment candidates using the backend version of the scoring logic |
+| `optimise_corridor` | `backend/optimizer.py` | `POST /api/optimise` | Accepts, declines, and measures candidate shipments for one corridor |
+| `dataset_summary` | `backend/repository.py` | `/api/health` and `/api/tables` | Returns table counts and total scanned capacity |
+| `find_corridor` | `backend/repository.py` | Corridor endpoints and optimiser endpoint | Looks up a corridor by ID |
 | `CapacityIQHandler.do_GET` | `backend/server.py` | HTTP server | Routes read-only API requests |
 | `CapacityIQHandler.do_POST` | `backend/server.py` | HTTP server | Routes optimiser requests |
 | `run` | `backend/server.py` | CLI entrypoint | Starts the local backend service |

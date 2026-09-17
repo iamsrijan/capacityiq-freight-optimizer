@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-import server
+from optimizer import optimise_corridor
+from repository import find_corridor, load_dataset
 
 
 class CapacityIQBackendTest(unittest.TestCase):
     def test_dataset_has_realistic_volume(self) -> None:
-        dataset = server.load_dataset()
+        dataset = load_dataset()
         counts = dataset["rawCounts"]
 
         self.assertGreaterEqual(counts["corridors"], 10)
@@ -17,17 +18,17 @@ class CapacityIQBackendTest(unittest.TestCase):
         self.assertGreaterEqual(counts["retailProfiles"], 8)
 
     def test_corridors_have_capacity_and_shipments(self) -> None:
-        dataset = server.load_dataset()
+        dataset = load_dataset()
 
         for corridor in dataset["corridors"]:
             self.assertGreaterEqual(len(corridor["modes"]), 4)
             self.assertGreaterEqual(len(corridor["shipments"]), 100)
 
     def test_optimiser_returns_business_metrics(self) -> None:
-        corridor = server.find_corridor("northeast")
+        corridor = find_corridor("northeast")
         self.assertIsNotNone(corridor)
 
-        result = server.optimise_corridor(
+        result = optimise_corridor(
             corridor,
             anchor_enabled=True,
             anchor_multiplier=1.0,
