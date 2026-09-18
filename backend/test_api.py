@@ -41,6 +41,11 @@ class CapacityIQBackendTest(unittest.TestCase):
         self.assertGreater(result["emptyKmAvoided"], 0)
         self.assertIn("road", result["remaining"])
         self.assertGreater(len(result["accepted"]), 0)
+        self.assertGreater(len(result["recommendedActions"]), 0)
+        first_action = result["recommendedActions"][0]
+        self.assertGreater(first_action["matchedTonnes"], 0)
+        self.assertGreater(first_action["revenue"], 0)
+        self.assertGreaterEqual(len(first_action["route"]), 2)
 
 
 if __name__ == "__main__":

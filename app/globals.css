@@ -509,6 +509,123 @@ button {
   padding: 16px;
 }
 
+.action-panel {
+  padding: 16px;
+}
+
+.action-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.action-card {
+  display: grid;
+  gap: 11px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.action-card-header {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.action-card-header strong,
+.action-card-header span,
+.action-card p,
+.action-route,
+.action-why small {
+  min-width: 0;
+}
+
+.action-card-header strong {
+  display: block;
+  font-size: 0.96rem;
+  line-height: 1.25;
+}
+
+.action-card-header span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.action-card p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.action-route {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.route-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 720;
+}
+
+.action-impact {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.action-impact span {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 680;
+  line-height: 1.25;
+}
+
+.action-impact strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ink);
+  font-size: 0.88rem;
+  line-height: 1.12;
+  word-break: break-word;
+}
+
+.action-why {
+  display: grid;
+  gap: 6px;
+}
+
+.action-why small {
+  display: block;
+  padding-left: 9px;
+  border-left: 3px solid var(--green);
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
 .match-list {
   display: grid;
   gap: 10px;
@@ -876,6 +993,12 @@ button {
   }
 
   .match-row {
+    grid-template-columns: 1fr;
+  }
+
+  .action-list,
+  .action-card-header,
+  .action-impact {
     grid-template-columns: 1fr;
   }
 

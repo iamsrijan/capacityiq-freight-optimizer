@@ -1,5 +1,134 @@
 import { modeTargetFill } from "./config";
-import type { Corridor, Mode, OptimizationResult, ScoredShipment, Shipment } from "./types";
+import type {
+  Corridor,
+  Mode,
+  OptimizationResult,
+  RecommendedAction,
+  ScoredShipment,
+  Shipment,
+} from "./types";
+
+function routeAnchorNode(label: string) {
+  return label.split("+")[0].split("/")[0].trim() || label;
+}
+
+function routeAnchorNodes(label: string) {
+  const nodes: string[] = [];
+
+  label
+    .replace(/\+/g, "/")
+    .split("/")
+    .forEach((part) => {
+      const node = part.trim();
+      if (node && !nodes.includes(node)) {
+        nodes.push(node);
+      }
+    });
+
+  return nodes.length ? nodes : [label];
+}
+
+function routeNodesFor(corridor: Corridor, shipment: ScoredShipment) {
+  const corridorOrigin = routeAnchorNode(corridor.origin);
+  const corridorOriginNodes = routeAnchorNodes(corridor.origin);
+  const corridorDestination = routeAnchorNode(corridor.destination);
+  const corridorDestinationNodes = routeAnchorNodes(corridor.destination);
+
+  if (shipment.mode === "air") {
+    return [
+      shipment.origin,
+      `${corridorDestination} air cargo window`,
+      `${corridorOrigin} air gateway`,
+      shipment.destination,
+    ].filter((node, index, nodes) => node && nodes.indexOf(node) === index);
+  }
+
+  if (shipment.mode === "sea") {
+    return [
+      shipment.origin,
+      `${corridorDestination} feeder consolidation`,
+      `${corridorOrigin} port linkage`,
+      shipment.destination,
+    ].filter((node, index, nodes) => node && nodes.indexOf(node) === index);
+  }
+
+  if (shipment.mode === "staging") {
+    return [
+      shipment.origin,
+      `${corridorDestination} staging area`,
+      `${corridorOrigin} consolidation hub`,
+      shipment.destination,
+    ].filter((node, index, nodes) => node && nodes.indexOf(node) === index);
+  }
+
+  return [
+    shipment.origin,
+    ...corridorDestinationNodes,
+    ...[...corridorOriginNodes].reverse(),
+    shipment.destination,
+  ].filter((node, index, nodes) => node && nodes.indexOf(node) === index);
+}
+
+function instructionFor(corridor: Corridor, shipment: ScoredShipment, maxDetour: number) {
+  const cargo = shipment.cargo.toLowerCase();
+
+  if (shipment.mode === "air") {
+    return `Book ${shipment.matchedTonnes} t of ${cargo} into the next belly-cargo window and keep road movement limited to first and last mile transfers.`;
+  }
+
+  if (shipment.mode === "sea") {
+    return `Batch ${shipment.matchedTonnes} t of ${cargo} through the feeder or port linkage and use the corridor only for drayage and consolidation.`;
+  }
+
+  if (shipment.mode === "staging") {
+    return `Stage ${shipment.matchedTonnes} t of ${cargo} at the consolidation buffer, then release it with the next compatible dispatch wave.`;
+  }
+
+  return `Assign ${shipment.matchedTonnes} t of ${cargo} to return truck capacity on ${corridor.returnLane} with a detour cap of ${maxDetour} km.`;
+}
+
+function buildRecommendedActions(
+  corridor: Corridor,
+  accepted: ScoredShipment[],
+  availableByMode: Map<Mode, number>,
+  maxDetour: number,
+  guardrail: number,
+): RecommendedAction[] {
+  return accepted.slice(0, 6).map((shipment, index) => {
+    const route = routeNodesFor(corridor, shipment);
+    const revenue = shipment.matchedTonnes * shipment.revenuePerTon;
+    const emptyKmAvoided = Math.round(
+      (shipment.matchedTonnes / (shipment.mode === "road" ? 16 : 24)) *
+        Math.max(120, corridor.distanceKm - shipment.detourKm),
+    );
+    const available = Math.max(availableByMode.get(shipment.mode) ?? 0, 1);
+
+    return {
+      id: `ACT-${String(index + 1).padStart(2, "0")}-${shipment.id}`,
+      shipmentId: shipment.id,
+      headline: `Move ${shipment.matchedTonnes} t of ${shipment.cargo} by ${shipment.mode}`,
+      shipper: shipment.shipper,
+      cargo: shipment.cargo,
+      mode: shipment.mode,
+      matchedTonnes: shipment.matchedTonnes,
+      route,
+      routeText: route.join(" -> "),
+      operatingInstruction: instructionFor(corridor, shipment, maxDetour),
+      why: [
+        `Score ${shipment.score} from route fit, reliability, revenue and urgency`,
+        `${shipment.detourKm} km detour is within the ${maxDetour} km policy`,
+        `${shipment.compatibility} cargo clears the ${guardrail}% compatibility guardrail`,
+        `${shipment.window} service window with ${shipment.reliability}% reliability`,
+      ],
+      revenue,
+      emptyKmAvoided,
+      capacityShare: Math.round((shipment.matchedTonnes / available) * 100),
+      timing: `Pickup ${shipment.pickupWindow ?? shipment.window}; deliver by ${
+        shipment.deliveryWindow ?? shipment.window
+      }`,
+    };
+  });
+}
 
 function scoreShipment(shipment: Shipment, maxDetour: number, guardrail: number) {
   const routeFit = Math.max(0, 1 - shipment.detourKm / Math.max(maxDetour, 1));
@@ -119,6 +248,13 @@ export function optimizeCorridor(
   return {
     accepted,
     declined,
+    recommendedActions: buildRecommendedActions(
+      corridor,
+      accepted,
+      availableByMode,
+      maxDetour,
+      guardrail,
+    ),
     remaining: Object.fromEntries(totalRemaining) as Partial<Record<Mode, number>>,
     adjustedCapacity,
     matchedTonnes,

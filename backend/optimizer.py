@@ -6,6 +6,138 @@ from config import COMPATIBILITY_FIT, MODE_TARGET_FILL
 from utils import as_int
 
 
+def route_anchor_node(label: str) -> str:
+    primary = label.split("+", 1)[0].split("/", 1)[0].strip()
+    return primary or label
+
+
+def route_anchor_nodes(label: str) -> list[str]:
+    nodes = []
+    for part in label.replace("+", "/").split("/"):
+        node = part.strip()
+        if node and node not in nodes:
+            nodes.append(node)
+    return nodes or [label]
+
+
+def route_nodes_for(corridor: dict[str, Any], shipment: dict[str, Any]) -> list[str]:
+    corridor_origin = route_anchor_node(str(corridor["origin"]))
+    corridor_origin_nodes = route_anchor_nodes(str(corridor["origin"]))
+    corridor_destination = route_anchor_node(str(corridor["destination"]))
+    corridor_destination_nodes = route_anchor_nodes(str(corridor["destination"]))
+    mode = str(shipment["mode"])
+
+    if mode == "air":
+        nodes = [
+            shipment["origin"],
+            f"{corridor_destination} air cargo window",
+            f"{corridor_origin} air gateway",
+            shipment["destination"],
+        ]
+    elif mode == "sea":
+        nodes = [
+            shipment["origin"],
+            f"{corridor_destination} feeder consolidation",
+            f"{corridor_origin} port linkage",
+            shipment["destination"],
+        ]
+    elif mode == "staging":
+        nodes = [
+            shipment["origin"],
+            f"{corridor_destination} staging area",
+            f"{corridor_origin} consolidation hub",
+            shipment["destination"],
+        ]
+    else:
+        nodes = [
+            shipment["origin"],
+            *corridor_destination_nodes,
+            *reversed(corridor_origin_nodes),
+            shipment["destination"],
+        ]
+
+    deduped: list[str] = []
+    for node in nodes:
+        node_text = str(node).strip()
+        if node_text and node_text not in deduped:
+            deduped.append(node_text)
+    return deduped
+
+
+def instruction_for(corridor: dict[str, Any], shipment: dict[str, Any], max_detour: int) -> str:
+    mode = str(shipment["mode"])
+    tonnes = as_int(shipment["matchedTonnes"])
+    cargo = str(shipment["cargo"]).lower()
+
+    if mode == "air":
+        return (
+            f"Book {tonnes} t of {cargo} into the next belly-cargo window and keep road movement "
+            "limited to first and last mile transfers."
+        )
+    if mode == "sea":
+        return (
+            f"Batch {tonnes} t of {cargo} through the feeder or port linkage and use the corridor "
+            "only for drayage and consolidation."
+        )
+    if mode == "staging":
+        return (
+            f"Stage {tonnes} t of {cargo} at the consolidation buffer, then release it with the "
+            "next compatible dispatch wave."
+        )
+    return (
+        f"Assign {tonnes} t of {cargo} to return truck capacity on {corridor['returnLane']} with "
+        f"a detour cap of {max_detour} km."
+    )
+
+
+def build_recommended_actions(
+    corridor: dict[str, Any],
+    accepted: list[dict[str, Any]],
+    available_by_mode: dict[str, int],
+    max_detour: int,
+    guardrail: int,
+) -> list[dict[str, Any]]:
+    actions = []
+    for index, shipment in enumerate(accepted[:6], start=1):
+        matched_tonnes = as_int(shipment["matchedTonnes"])
+        mode = str(shipment["mode"])
+        revenue = matched_tonnes * as_int(shipment["revenuePerTon"])
+        empty_km = round(
+            (matched_tonnes / (16 if mode == "road" else 24))
+            * max(120, as_int(corridor["distanceKm"]) - as_int(shipment["detourKm"]))
+        )
+        available = max(available_by_mode.get(mode, 0), 1)
+        capacity_share = round((matched_tonnes / available) * 100)
+        route = route_nodes_for(corridor, shipment)
+
+        actions.append(
+            {
+                "id": f"ACT-{index:02d}-{shipment['id']}",
+                "shipmentId": shipment["id"],
+                "headline": f"Move {matched_tonnes} t of {shipment['cargo']} by {mode}",
+                "shipper": shipment["shipper"],
+                "cargo": shipment["cargo"],
+                "mode": mode,
+                "matchedTonnes": matched_tonnes,
+                "route": route,
+                "routeText": " -> ".join(route),
+                "operatingInstruction": instruction_for(corridor, shipment, max_detour),
+                "why": [
+                    f"Score {shipment['score']} from route fit, reliability, revenue and urgency",
+                    f"{shipment['detourKm']} km detour is within the {max_detour} km policy",
+                    f"{shipment['compatibility']} cargo clears the {guardrail}% compatibility guardrail",
+                    f"{shipment['window']} service window with {shipment['reliability']}% reliability",
+                ],
+                "revenue": revenue,
+                "emptyKmAvoided": empty_km,
+                "capacityShare": capacity_share,
+                "timing": f"Pickup {shipment.get('pickupWindow', shipment['window'])}; deliver by {shipment.get('deliveryWindow', shipment['window'])}",
+            }
+        )
+
+    return actions
+
+
 def score_shipment(shipment: dict[str, Any], max_detour: int, guardrail: int) -> int:
     route_fit = max(0, 1 - as_int(shipment["detourKm"]) / max(max_detour, 1))
     reliability_fit = as_int(shipment["reliability"]) / 100
@@ -135,6 +267,13 @@ def optimise_corridor(
     return {
         "accepted": accepted,
         "declined": declined,
+        "recommendedActions": build_recommended_actions(
+            corridor,
+            accepted,
+            available_by_mode,
+            max_detour,
+            guardrail,
+        ),
         "remaining": total_remaining,
         "modeUtilisation": mode_utilisation,
         "adjustedCapacity": adjusted_capacity,

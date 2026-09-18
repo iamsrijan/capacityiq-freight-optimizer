@@ -210,6 +210,7 @@ export default function Home() {
 
     return { ...item, available, remaining, used, utilization };
   });
+  const recommendedActions = optimization.recommendedActions ?? [];
 
   return (
     <main className="app-shell">
@@ -442,6 +443,70 @@ export default function Home() {
                   <Box size={15} />
                   {optimization.anchorTonnes.toLocaleString("en-IN")} t anchor volume
                 </span>
+              </div>
+            </div>
+
+            <div className="panel action-panel">
+              <div className="section-title">
+                <Route size={18} />
+                <h2>Action Recommendations</h2>
+              </div>
+
+              <div className="action-list">
+                {recommendedActions.slice(0, 4).map((action) => {
+                  const ModeIcon = modeMeta[action.mode].Icon;
+
+                  return (
+                    <article className="action-card" key={action.id}>
+                      <div className="action-card-header">
+                        <div className={`mode-chip ${modeMeta[action.mode].className}`}>
+                          <ModeIcon size={16} />
+                          {modeMeta[action.mode].label}
+                        </div>
+                        <div>
+                          <strong>{action.headline}</strong>
+                          <span>{action.shipper}</span>
+                        </div>
+                      </div>
+
+                      <p>{action.operatingInstruction}</p>
+
+                      <div className="action-route" aria-label={`Recommended route for ${action.cargo}`}>
+                        {action.route.map((node, index) => (
+                          <span className="route-step" key={`${action.id}-${node}`}>
+                            {index > 0 ? <ArrowRightLeft size={13} /> : null}
+                            {node}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="action-impact">
+                        <span>
+                          <strong>{action.matchedTonnes.toLocaleString("en-IN")} t</strong>
+                          quantity
+                        </span>
+                        <span>
+                          <strong>{formatShortCurrency(action.revenue)}</strong>
+                          revenue
+                        </span>
+                        <span>
+                          <strong>{action.emptyKmAvoided.toLocaleString("en-IN")} km</strong>
+                          empty km avoided
+                        </span>
+                        <span>
+                          <strong>{action.capacityShare}%</strong>
+                          mode capacity
+                        </span>
+                      </div>
+
+                      <div className="action-why">
+                        {action.why.slice(0, 3).map((reason) => (
+                          <small key={reason}>{reason}</small>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </div>
 

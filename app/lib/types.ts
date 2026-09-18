@@ -55,6 +55,24 @@ export type ScoredShipment = Shipment & {
   reason: string;
 };
 
+export type RecommendedAction = {
+  id: string;
+  shipmentId: string;
+  headline: string;
+  shipper: string;
+  cargo: string;
+  mode: Mode;
+  matchedTonnes: number;
+  route: string[];
+  routeText: string;
+  operatingInstruction: string;
+  why: string[];
+  revenue: number;
+  emptyKmAvoided: number;
+  capacityShare: number;
+  timing: string;
+};
+
 export type RetailProfile = {
   id: RetailId;
   name: string;
@@ -92,6 +110,7 @@ export type ModeUtilizationResult = ModeCapacity & {
 export type OptimizationResult = {
   accepted: ScoredShipment[];
   declined: ScoredShipment[];
+  recommendedActions?: RecommendedAction[];
   remaining: Partial<Record<Mode, number>>;
   modeUtilisation?: ModeUtilizationResult[];
   adjustedCapacity: number;

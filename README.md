@@ -213,6 +213,7 @@ The optimiser returns:
 | --- | --- |
 | `accepted` | Shipments accepted into capacity |
 | `declined` | Shipments rejected or queued for review |
+| `recommendedActions` | Business-readable instructions showing what cargo to move, by which mode, through which route sequence, and why |
 | `remaining` | Remaining tonnes by mode |
 | `modeUtilisation` | Used, remaining, and utilisation by mode |
 | `bookableTonnes` | Tonnes the optimiser is allowed to allocate after operating reserve |
@@ -224,6 +225,31 @@ The optimiser returns:
 | `loadFactor` | Return capacity load factor |
 | `unitCostDrop` | Estimated freight unit cost reduction |
 | `anchorTonnes` | Anchor demand volume used in the optimiser run |
+
+## How The App Recommends Routes, Products, And Quantity
+
+The app no longer stops at KPI numbers. Each backend optimisation run also creates an Action Recommendations panel. This panel converts the accepted shipment matches into plain operating instructions.
+
+For every recommended move, the backend decides:
+
+| Decision | How It Is Calculated |
+| --- | --- |
+| What product or cargo should move | Selects the accepted shipment with the best combination of compatibility score, demand priority, revenue, detour feasibility, and available mode capacity |
+| How much should move | Uses the matched tonnes actually accepted into bookable capacity after reserve capacity is held back |
+| Which mode should carry it | Uses the shipment mode that passed capacity and guardrail checks: road, air, sea, or staging |
+| Which route should be followed | Builds a corridor-aware route sequence from shipment origin, corridor nodes, and shipment destination |
+| Why the recommendation is useful | Explains compatibility, revenue, empty kilometres avoided, and capacity share in simple language |
+
+Example recommendation:
+
+```text
+Move 26 t of packaged food by road
+Route: Dibrugarh -> Guwahati -> Siliguri -> Kolkata
+Instruction: Assign this load to a return truck lane within the detour policy.
+Why: Strong compatibility, clear backhaul fit, meaningful revenue, and reduced empty kilometres.
+```
+
+This is still a prototype engine. In production, the same contract can be connected to live GPS, transporter availability, TMS bookings, airline cargo schedules, port slots, toll data, weather, and a formal optimisation solver.
 
 ## Frontend Data Flow
 
@@ -296,6 +322,9 @@ capacityiq-freight-optimizer/
 | `fetchBackendOptimization` | `app/lib/api.ts` | `Home` | Posts the applied freight inputs to `/api/optimise` |
 | `scoreShipment` | `app/lib/optimizer.ts` | `optimizeCorridor` | Browser fallback scoring only, used if the backend is unavailable |
 | `optimizeCorridor` | `app/lib/optimizer.ts` | `Home` through `useMemo` | Browser fallback optimiser only, used if the backend is unavailable |
+| `routeNodesFor` | `app/lib/optimizer.ts` | `buildRecommendedActions` | Builds browser fallback route sequences from corridor and shipment fields |
+| `instructionFor` | `app/lib/optimizer.ts` | `buildRecommendedActions` | Converts mode and detour policy into a simple operating instruction |
+| `buildRecommendedActions` | `app/lib/optimizer.ts` | `optimizeCorridor` | Creates browser fallback action cards when the backend is unavailable |
 | `formatCurrency` | `app/lib/formatters.ts` | Metric and row render logic | Formats rupee values in Indian currency style |
 | `formatShortCurrency` | `app/lib/formatters.ts` | Metric cards | Shortens currency into lakh and crore labels |
 | `Metric` | `app/components/Metric.tsx` | `Home` | Reusable KPI card component |
@@ -308,6 +337,9 @@ capacityiq-freight-optimizer/
 | `read_csv_table` | `backend/repository.py` | `load_dataset` | Reads a CSV table from `backend/data` |
 | `load_dataset` | `backend/repository.py` | Repository startup and tests | Loads all CSV tables and converts them into API-ready objects |
 | `score_shipment` | `backend/optimizer.py` | `optimise_corridor` | Scores shipment candidates using the backend version of the scoring logic |
+| `route_nodes_for` | `backend/optimizer.py` | `build_recommended_actions` | Builds the recommended route sequence from shipment origin, corridor waypoints, and shipment destination |
+| `instruction_for` | `backend/optimizer.py` | `build_recommended_actions` | Creates mode-specific operating instructions for road, air, sea, and staging cargo |
+| `build_recommended_actions` | `backend/optimizer.py` | `optimise_corridor` | Converts accepted shipment matches into business-readable action recommendations |
 | `optimise_corridor` | `backend/optimizer.py` | `POST /api/optimise` | Accepts, declines, and measures candidate shipments for one corridor |
 | `dataset_summary` | `backend/repository.py` | `/api/health` and `/api/tables` | Returns table counts and total scanned capacity |
 | `find_corridor` | `backend/repository.py` | Corridor endpoints and optimiser endpoint | Looks up a corridor by ID |
@@ -373,3 +405,12 @@ Expected result:
 | Build | Frontend build completes |
 | API tables | JSON table counts are returned |
 | Frontend page | HTTP `200 OK` |
+
+## Demo Study Documents
+
+The `docs` folder includes Word documents that can be used for preparation and walkthroughs:
+
+| Document | Purpose |
+| --- | --- |
+| `docs/CapacityIQ_Study_Guide_FAQ.docx` | One-hour meeting study guide with demo agenda, feature explanation, AI engine explanation, FAQs, and closing talk track |
+| `docs/CapacityIQ_Demo_Runbook.docx` | Practical demo walkthrough for operating the local app during a live session |
