@@ -58,8 +58,8 @@ The core thesis is simple:
 Clone the project into any folder on your machine or server:
 
 ```bash
-git clone https://github.com/iamsrijan/capacityiq-freight-optimizer.git
-cd capacityiq-freight-optimizer
+git clone https://github.com/Rump-Labs/RouteFlow.git
+cd RouteFlow
 ```
 
 Run the full local stack:
