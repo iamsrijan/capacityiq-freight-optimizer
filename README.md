@@ -251,6 +251,98 @@ Why: Strong compatibility, clear backhaul fit, meaningful revenue, and reduced e
 
 This is still a prototype engine. In production, the same contract can be connected to live GPS, transporter availability, TMS bookings, airline cargo schedules, port slots, toll data, weather, and a formal optimisation solver.
 
+## Optimiser Calculation Formulas
+
+When the user selects Run optimiser, the frontend sends the active corridor and scenario inputs to `/api/optimise`. The backend calculates capacity, shipment scores, accepted matches, KPI cards, mode utilisation, and recommended actions with the formulas below.
+
+### Scenario And Capacity
+
+| Parameter | Formula |
+| --- | --- |
+| `anchorFactor` | `anchorMultiplier` when Britannia anchor is enabled, otherwise `0.54` |
+| `availableCapacity` | `capacity * (availablePercent / 100) * anchorFactor` |
+| `bookableCapacity` | `availableCapacity * modeTargetFill` |
+| `reserveTonnes` | `availableCapacity - bookableCapacity` |
+
+Mode target fill values keep a practical operating buffer instead of allowing every mode to show 100% utilisation.
+
+| Mode | Target Fill |
+| --- | ---: |
+| `road` | `0.93` |
+| `air` | `0.84` |
+| `sea` | `0.78` |
+| `staging` | `0.88` |
+
+### Shipment Scoring
+
+Each shipment receives a score before capacity is allocated.
+
+| Component | Formula |
+| --- | --- |
+| `routeFit` | `max(0, 1 - detourKm / max(maxDetour, 1))` |
+| `reliabilityFit` | `reliability / 100` |
+| `revenueFit` | `min(revenuePerTon / 12000, 1)` |
+| `urgencyFit` | `urgency / 100` |
+| `compatibilityFit` | Value from the compatibility table below |
+| `guardrailPenalty` | `((guardrail - 50) / 50) * (1 - compatibilityFit) * 22` |
+| `score` | `round(routeFit * 32 + reliabilityFit * 24 + compatibilityFit * 22 + revenueFit * 15 + urgencyFit * 7 - guardrailPenalty)` |
+
+Compatibility fit values:
+
+| Cargo Compatibility | Fit Value |
+| --- | ---: |
+| `ambient` | `1.00` |
+| `dry` | `1.00` |
+| `fragile` | `0.86` |
+| `regulated` | `0.74` |
+| `chilled` | `0.42` |
+
+### Acceptance Rules
+
+| Rule | Formula Or Condition |
+| --- | --- |
+| Minimum acceptance score | `threshold = max(55, guardrail - 12)` |
+| Capacity check | Reject if no bookable capacity remains in the shipment mode |
+| Detour check | Reject non-air shipments when `detourKm > maxDetour` |
+| Score check | Reject when `score < threshold` |
+| Strict guardrail check | Reject `chilled` or `regulated` cargo when `guardrail >= 82` |
+
+Accepted shipments are processed from highest score to lowest score. A shipment can be fully matched or partially matched depending on the bookable capacity left in its mode.
+
+### Allocation And KPI Cards
+
+| Output | Formula |
+| --- | --- |
+| `matchedTonnes` per shipment | `min(shipmentTonnes, remainingBookableCapacityForMode)` |
+| `adjustedCapacity` | `sum(availableCapacity across all modes)` |
+| `totalMatchedTonnes` | `sum(matchedTonnes for accepted shipments)` |
+| `revenue` | `sum(matchedTonnes * revenuePerTon)` |
+| `emptyKmAvoided` | `round(sum((matchedTonnes / vehicleEquivalentTonnes) * max(120, distanceKm - detourKm)))` |
+| `vehicleEquivalentTonnes` | `16` for road, `24` for air, sea, or staging |
+| `costSaved` | `emptyKmAvoided * 68` |
+| `loadFactor` | `round(totalMatchedTonnes / adjustedCapacity * 100)` |
+| `baselineLoadFactor` | `19` when anchor is enabled, otherwise `11` |
+| `unitCostDrop` | `max(0, min(34, round((loadFactor - baselineLoadFactor) * 0.62)))` |
+| `anchorTonnes` | `round(baseAnchorTonnes * anchorFactor)` |
+
+### Mode Utilisation
+
+| Output | Formula |
+| --- | --- |
+| `usedTonnes` | `bookableCapacity - remainingBookableCapacity` |
+| `remainingTonnes` | `availableCapacity - usedTonnes` |
+| `reserveTonnes` | `availableCapacity - bookableCapacity` |
+| `utilisation` | `round(usedTonnes / availableCapacity * 100)` |
+
+### Recommended Action Metrics
+
+| Output | Formula |
+| --- | --- |
+| `actionRevenue` | `matchedTonnes * revenuePerTon` |
+| `actionEmptyKmAvoided` | `round((matchedTonnes / vehicleEquivalentTonnes) * max(120, distanceKm - detourKm))` |
+| `capacityShare` | `round(matchedTonnes / availableCapacityForMode * 100)` |
+| `routeText` | Corridor-aware route nodes joined with `->` |
+
 ## Frontend Data Flow
 
 The frontend starts with embedded sample data so the app can still open if the backend is not running. When the backend is available, the app fetches:
