@@ -10,6 +10,17 @@ from utils import as_float, as_int
 
 VectorRow = dict[str, Any]
 
+SHIPMENT_CLUSTER_FEATURES = [
+    "tonnes",
+    "revenuePerTon",
+    "detourKm",
+    "reliability",
+    "urgency",
+    "cargoFit",
+    "driverScore",
+    "clearanceMinutes",
+]
+
 
 def mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0
@@ -310,6 +321,56 @@ def build_shipment_rows(dataset: dict[str, Any]) -> list[VectorRow]:
     return rows
 
 
+def cluster_fit_score(centroid: dict[str, float]) -> float:
+    """Convert a shipment-cluster centroid into a reusable optimisation signal."""
+    revenue_component = min(centroid["revenuePerTon"] / 16000, 1)
+    reliability_component = centroid["reliability"] / 100
+    urgency_component = centroid["urgency"] / 100
+    cargo_component = centroid["cargoFit"]
+    driver_component = centroid["driverScore"] / 100
+    detour_component = max(0, 1 - centroid["detourKm"] / 220)
+    clearance_component = max(0, 1 - centroid["clearanceMinutes"] / 720)
+
+    return round(
+        revenue_component * 0.16
+        + reliability_component * 0.18
+        + urgency_component * 0.1
+        + cargo_component * 0.22
+        + driver_component * 0.14
+        + detour_component * 0.1
+        + clearance_component * 0.1,
+        2,
+    )
+
+
+def build_shipment_cluster_lookup(dataset: dict[str, Any], k: int = 5) -> dict[str, dict[str, Any]]:
+    rows = build_shipment_rows(dataset)
+    assignments = run_kmeans(rows, SHIPMENT_CLUSTER_FEATURES, k)
+    grouped: dict[int, list[VectorRow]] = defaultdict(list)
+    for index, row in enumerate(rows):
+        grouped[assignments[index]].append(row)
+
+    cluster_profiles: dict[int, dict[str, Any]] = {}
+    for cluster_number, members in grouped.items():
+        centroid = centroid_for(members, SHIPMENT_CLUSTER_FEATURES)
+        label = cluster_label("shipments", centroid)
+        fit = cluster_fit_score(centroid)
+        cluster_profiles[cluster_number] = {
+            "id": f"shipments-{cluster_number + 1}",
+            "label": label,
+            "fit": fit,
+            "adjustment": round((fit - 0.66) * 24),
+            "insight": cluster_insight("shipments", label),
+            "size": len(members),
+            "centroid": centroid,
+        }
+
+    return {
+        str(row["id"]): cluster_profiles[assignments[index]]
+        for index, row in enumerate(rows)
+    }
+
+
 def build_vehicle_rows(dataset: dict[str, Any]) -> list[VectorRow]:
     rows = []
     for partner in dataset["partners"]:
@@ -387,16 +448,7 @@ def build_clusters(dataset: dict[str, Any]) -> dict[str, Any]:
         "regulatedShare",
         "avgDriverScore",
     ]
-    shipment_features = [
-        "tonnes",
-        "revenuePerTon",
-        "detourKm",
-        "reliability",
-        "urgency",
-        "cargoFit",
-        "driverScore",
-        "clearanceMinutes",
-    ]
+    shipment_features = SHIPMENT_CLUSTER_FEATURES
     vehicle_features = [
         "fleetSize",
         "onTimePercent",

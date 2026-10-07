@@ -31,6 +31,24 @@ const contractFit: Record<string, number> = {
   "spot market": 0.68,
 };
 
+type ShipmentClusterProfile = {
+  label: string;
+  fit: number;
+  adjustment: number;
+  insight: string;
+};
+
+const shipmentClusterFeatures = [
+  "tonnes",
+  "revenuePerTon",
+  "detourKm",
+  "reliability",
+  "urgency",
+  "cargoFit",
+  "driverScore",
+  "clearanceMinutes",
+] as const;
+
 function clampPercent(value: number) {
   return Math.max(0, Math.min(1, value));
 }
@@ -50,6 +68,161 @@ function shipmentCargoFit(shipment: Shipment) {
 
 function shipmentContractFit(shipment: Shipment) {
   return contractFit[shipment.contractType ?? "spot market"] ?? 0.68;
+}
+
+function mean(values: number[]) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+}
+
+function shipmentFeatureRow(shipment: Shipment) {
+  return {
+    tonnes: shipment.tonnes,
+    revenuePerTon: shipment.revenuePerTon,
+    detourKm: shipment.detourKm,
+    reliability: shipment.reliability,
+    urgency: shipment.urgency,
+    cargoFit: shipmentCargoFit(shipment),
+    driverScore: shipment.driverScore ?? 78,
+    clearanceMinutes: clearanceMinutes(shipment),
+  };
+}
+
+function standardiseRows(rows: Array<Record<string, number>>) {
+  const stats = shipmentClusterFeatures.map((feature) => {
+    const column = rows.map((row) => row[feature]);
+    const avg = mean(column);
+    const variance = mean(column.map((value) => (value - avg) ** 2));
+    return { avg, deviation: Math.sqrt(variance) || 1 };
+  });
+
+  return rows.map((row) =>
+    shipmentClusterFeatures.map((feature, index) => (row[feature] - stats[index].avg) / stats[index].deviation),
+  );
+}
+
+function distance(first: number[], second: number[]) {
+  return Math.sqrt(first.reduce((sum, value, index) => sum + (value - second[index]) ** 2, 0));
+}
+
+function nearestCentroid(vector: number[], centroids: number[][]) {
+  const distances = centroids.map((centroid) => distance(vector, centroid));
+  return distances.indexOf(Math.min(...distances));
+}
+
+function runKmeans(rows: Array<Record<string, number>>, k: number) {
+  if (!rows.length) {
+    return [] as number[];
+  }
+
+  const vectors = standardiseRows(rows);
+  const clusterCount = Math.max(1, Math.min(k, rows.length));
+  const orderedIndices = vectors
+    .map((vector, index) => ({ index, weight: vector.reduce((sum, value) => sum + value, 0) }))
+    .sort((first, second) => first.weight - second.weight)
+    .map((item) => item.index);
+  let centroids = Array.from({ length: clusterCount }, (_, index) => {
+    const position =
+      clusterCount === 1 ? Math.floor((orderedIndices.length - 1) / 2) : Math.round((index * (orderedIndices.length - 1)) / (clusterCount - 1));
+    return vectors[orderedIndices[position]];
+  });
+  let assignments = new Array(rows.length).fill(0);
+
+  for (let iteration = 0; iteration < 28; iteration += 1) {
+    const nextAssignments = vectors.map((vector) => nearestCentroid(vector, centroids));
+    if (nextAssignments.every((assignment, index) => assignment === assignments[index])) {
+      break;
+    }
+    assignments = nextAssignments;
+    centroids = centroids.map((centroid, clusterIndex) => {
+      const members = vectors.filter((_, index) => assignments[index] === clusterIndex);
+      if (!members.length) {
+        return centroid;
+      }
+      return centroid.map((_, featureIndex) => mean(members.map((member) => member[featureIndex])));
+    });
+  }
+
+  return assignments;
+}
+
+function centroidFor(rows: Array<Record<string, number>>) {
+  return Object.fromEntries(
+    shipmentClusterFeatures.map((feature) => [feature, mean(rows.map((row) => row[feature]))]),
+  ) as Record<(typeof shipmentClusterFeatures)[number], number>;
+}
+
+function shipmentClusterLabel(centroid: ReturnType<typeof centroidFor>) {
+  if (centroid.revenuePerTon > 14000) {
+    return "High-value urgent cargo";
+  }
+  if (centroid.cargoFit < 0.7) {
+    return "Strict compatibility cargo";
+  }
+  if (centroid.tonnes > 500) {
+    return "Bulk consolidation loads";
+  }
+  return "Standard compatible backhaul";
+}
+
+function shipmentClusterInsight(label: string) {
+  if (label === "High-value urgent cargo") {
+    return "Assign secure transport, high driver score, and fast handling paths.";
+  }
+  if (label === "Strict compatibility cargo") {
+    return "Separate from food-grade anchor loads unless compatibility rules explicitly allow it.";
+  }
+  if (label === "Bulk consolidation loads") {
+    return "Batch into truck, staging, or feeder moves instead of fragmenting capacity.";
+  }
+  return "Use as normal marketplace fill against available return capacity.";
+}
+
+function shipmentClusterFit(centroid: ReturnType<typeof centroidFor>) {
+  const revenueComponent = Math.min(centroid.revenuePerTon / 16000, 1);
+  const reliabilityComponent = centroid.reliability / 100;
+  const urgencyComponent = centroid.urgency / 100;
+  const cargoComponent = centroid.cargoFit;
+  const driverComponent = centroid.driverScore / 100;
+  const detourComponent = Math.max(0, 1 - centroid.detourKm / 220);
+  const clearanceComponent = Math.max(0, 1 - centroid.clearanceMinutes / 720);
+
+  return Number(
+    (
+      revenueComponent * 0.16 +
+      reliabilityComponent * 0.18 +
+      urgencyComponent * 0.1 +
+      cargoComponent * 0.22 +
+      driverComponent * 0.14 +
+      detourComponent * 0.1 +
+      clearanceComponent * 0.1
+    ).toFixed(2),
+  );
+}
+
+function buildShipmentClusterLookup(shipments: Shipment[]) {
+  const featureRows = shipments.map(shipmentFeatureRow);
+  const assignments = runKmeans(featureRows, 5);
+  const grouped = new Map<number, Array<Record<string, number>>>();
+  assignments.forEach((clusterIndex, rowIndex) => {
+    grouped.set(clusterIndex, [...(grouped.get(clusterIndex) ?? []), featureRows[rowIndex]]);
+  });
+
+  const profiles = new Map<number, ShipmentClusterProfile>();
+  grouped.forEach((members, clusterIndex) => {
+    const centroid = centroidFor(members);
+    const label = shipmentClusterLabel(centroid);
+    const fit = shipmentClusterFit(centroid);
+    profiles.set(clusterIndex, {
+      label,
+      fit,
+      adjustment: Math.round((fit - 0.66) * 24),
+      insight: shipmentClusterInsight(label),
+    });
+  });
+
+  return new Map(
+    shipments.map((shipment, index) => [shipment.id, profiles.get(assignments[index])]),
+  );
 }
 
 function shipmentScheduleFit(shipment: Shipment, maxClearanceMinutes: number) {
@@ -215,7 +388,10 @@ function buildRecommendedActions(
       routeText: route.join(" -> "),
       operatingInstruction: instructionFor(corridor, shipment, maxDetour),
       why: [
-        `Score ${shipment.score} from route fit, reliability, revenue, cargo fit and operating quality`,
+        `Score ${shipment.score} from route fit, reliability, revenue, cargo fit, operating quality and K-means cluster fit`,
+        `K-means group: ${shipment.clusterLabel ?? "standard shipment cluster"} with ${Math.round(
+          (shipment.clusterFit ?? 0) * 100,
+        )}% cluster fit`,
         `${shipment.detourKm} km detour is within the ${maxDetour} km policy`,
         `${shipment.compatibility} cargo clears the ${guardrail}% compatibility guardrail`,
         `${shipment.contractType ?? "spot market"} with driver score ${shipment.driverScore ?? 78} and ${shipment.routeFamiliarityTrips ?? 0} prior route trips`,
@@ -236,6 +412,10 @@ function buildRecommendedActions(
       compatibilityNote: shipment.compatibilityNote,
       schedulePlan: schedulePlanFor(shipment, maxClearanceMinutes),
       riskFlags: shipment.riskFlags ?? [],
+      clusterLabel: shipment.clusterLabel,
+      clusterFit: shipment.clusterFit,
+      clusterAdjustment: shipment.clusterAdjustment,
+      clusterInsight: shipment.clusterInsight,
     };
   });
 }
@@ -247,6 +427,7 @@ function scoreShipment(
   minDriverScore: number,
   maxClearanceMinutes: number,
   preferContracted: boolean,
+  clusterProfile?: ShipmentClusterProfile,
 ) {
   const routeFit = Math.max(0, 1 - shipment.detourKm / Math.max(maxDetour, 1));
   const reliabilityFit = shipment.reliability / 100;
@@ -265,6 +446,8 @@ function scoreShipment(
   const routeFamiliarityFit = Math.min((shipment.routeFamiliarityTrips ?? 0) / 50, 1);
   const contractStrength = shipmentContractFit(shipment);
   const timingFit = shipmentScheduleFit(shipment, maxClearanceMinutes);
+  const clusterFit = clusterProfile?.fit ?? 0.72;
+  const clusterAdjustment = clusterProfile?.adjustment ?? 0;
   const guardrailPenalty = ((guardrail - 50) / 50) * (1 - compatibilityFit) * 22;
   const driverPenalty = Math.max(0, minDriverScore - (shipment.driverScore ?? 78)) * 0.35;
   const contractPenalty = preferContracted && shipment.contractType === "spot market" ? 5 : 0;
@@ -281,7 +464,8 @@ function scoreShipment(
       routeFamiliarityFit * 6 +
       contractStrength * 4 +
       timingFit * 2 -
-      guardrailPenalty -
+      guardrailPenalty +
+      clusterAdjustment -
       driverPenalty -
       contractPenalty -
       clearancePenalty,
@@ -298,7 +482,13 @@ function scoreShipment(
       routeFamiliarityFit: Number(routeFamiliarityFit.toFixed(2)),
       contractFit: Number(contractStrength.toFixed(2)),
       scheduleFit: Number(timingFit.toFixed(2)),
+      clusterFit,
+      clusterAdjustment,
     },
+    clusterLabel: clusterProfile?.label ?? "Scenario baseline cluster",
+    clusterFit,
+    clusterAdjustment,
+    clusterInsight: clusterProfile?.insight ?? "No K-means segment was available for this shipment.",
     riskFlags: riskFlagsFor(shipment, minDriverScore, maxClearanceMinutes, preferContracted),
   };
 }
@@ -332,6 +522,10 @@ function buildOperationalSummary(
     avgMonthlyCost: Math.round(
       accepted.reduce((sum, item) => sum + (item.avgMonthlyCost ?? 0), 0) / acceptedCount,
     ),
+    avgClusterFit: Math.round(
+      (accepted.reduce((sum, item) => sum + (item.clusterFit ?? 0.72), 0) / acceptedCount) * 100,
+    ),
+    clusterBoostedMatches: accepted.filter((item) => (item.clusterAdjustment ?? 0) > 0).length,
   };
 }
 
@@ -357,6 +551,8 @@ export function optimizeCorridor(
     remainingBookable.set(item.mode, bookableCapacity);
   });
 
+  const clusterLookup = buildShipmentClusterLookup(corridor.shipments);
+
   const scored = corridor.shipments
     .map((shipment) => {
       const scoring = scoreShipment(
@@ -366,6 +562,7 @@ export function optimizeCorridor(
         minDriverScore,
         maxClearanceMinutes,
         preferContracted,
+        clusterLookup.get(shipment.id),
       );
 
       return {
@@ -373,6 +570,10 @@ export function optimizeCorridor(
         score: scoring.score,
         scoring: scoring.scoring,
         riskFlags: scoring.riskFlags,
+        clusterLabel: scoring.clusterLabel,
+        clusterFit: scoring.clusterFit,
+        clusterAdjustment: scoring.clusterAdjustment,
+        clusterInsight: scoring.clusterInsight,
         matchedTonnes: 0,
         reason: "",
       };

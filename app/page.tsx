@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 import { Metric } from "./components/Metric";
-import { corridors, fallbackClusters, retailProfiles } from "./data/fallback-data";
+import { corridors, retailProfiles } from "./data/fallback-data";
 import { fetchBackendOptimization, fetchInitialDashboardData } from "./lib/api";
 import { initialNetworkInputs, sameNetworkInputs } from "./lib/config";
 import { formatCurrency, formatShortCurrency } from "./lib/formatters";
@@ -31,8 +31,6 @@ import { modeMeta } from "./lib/mode-meta";
 import { optimizeCorridor } from "./lib/optimizer";
 import type {
   BackendSummary,
-  ClusterDomain,
-  ClusterResult,
   Corridor,
   CorridorId,
   DataSource,
@@ -43,28 +41,8 @@ import type {
   RetailProfile,
 } from "./lib/types";
 
-function formatClusterValue(key: string, value: number | string | null | undefined) {
-  if (value === null || value === undefined) {
-    return "n/a";
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (key.toLowerCase().includes("revenue") || key.toLowerCase().includes("cost")) {
-    return formatShortCurrency(value);
-  }
-
-  if (key.toLowerCase().includes("share") || key.toLowerCase().includes("percent") || key === "weightedUplift") {
-    return `${Math.round(value)}%`;
-  }
-
-  return Math.round(value).toLocaleString("en-IN");
-}
-
 export default function Home() {
-  const [view, setView] = useState<"network" | "retail" | "clusters">("network");
+  const [view, setView] = useState<"network" | "retail">("network");
   const [selectedCorridorId, setSelectedCorridorId] = useState<CorridorId>(
     initialNetworkInputs.corridorId,
   );
@@ -83,9 +61,6 @@ export default function Home() {
   const [passengerWave, setPassengerWave] = useState(62);
   const [corridorData, setCorridorData] = useState<Corridor[]>(corridors);
   const [retailData, setRetailData] = useState<RetailProfile[]>(retailProfiles);
-  const [clusterData, setClusterData] = useState<ClusterResult>(fallbackClusters);
-  const [selectedClusterDomain, setSelectedClusterDomain] =
-    useState<ClusterDomain["domain"]>("routes");
   const [backendSummary, setBackendSummary] = useState<BackendSummary | null>(null);
   const [dataSource, setDataSource] = useState<DataSource>("loading");
   const [backendOptimization, setBackendOptimization] = useState<OptimizationResult | null>(null);
@@ -101,7 +76,6 @@ export default function Home() {
           corridors: loadedCorridors,
           retailProfiles: loadedRetailProfiles,
           summary,
-          clusters,
         } = await fetchInitialDashboardData();
 
         if (!active) {
@@ -132,7 +106,6 @@ export default function Home() {
         }
 
         setBackendSummary(summary);
-        setClusterData(clusters);
         setDataSource("backend");
       } catch {
         if (active) {
@@ -257,10 +230,6 @@ export default function Home() {
     return { ...item, available, remaining, used, utilization };
   });
   const recommendedActions = optimization.recommendedActions ?? [];
-  const selectedCluster =
-    clusterData.domains.find((item) => item.domain === selectedClusterDomain) ??
-    clusterData.domains[0];
-  const totalClusterRows = selectedCluster?.clusters.reduce((sum, item) => sum + item.size, 0) ?? 0;
   const operationalSummary =
     optimization.operationalSummary ?? {
       avgDriverScore: 0,
@@ -270,6 +239,8 @@ export default function Home() {
       airClearanceBreaches: 0,
       strictCompatibilityRejected: 0,
       avgMonthlyCost: 0,
+      avgClusterFit: 0,
+      clusterBoostedMatches: 0,
     };
 
   return (
@@ -334,16 +305,6 @@ export default function Home() {
           >
             <ShoppingBag size={16} />
             Airport retail
-          </button>
-          <button
-            type="button"
-            className={view === "clusters" ? "is-active" : ""}
-            onClick={() => setView("clusters")}
-            role="tab"
-            aria-selected={view === "clusters"}
-          >
-            <Database size={16} />
-            AI clusters
           </button>
         </div>
       </header>
@@ -629,10 +590,20 @@ export default function Home() {
                           <strong>{action.contractType ?? "spot market"}</strong>
                           contract
                         </span>
+                        <span>
+                          <strong>{action.clusterFit ? `${Math.round(action.clusterFit * 100)}%` : "n/a"}</strong>
+                          cluster fit
+                        </span>
                       </div>
 
                       <p className="action-note">{action.compatibilityNote}</p>
                       <p className="action-note">{action.schedulePlan}</p>
+                      {action.clusterLabel ? (
+                        <p className="action-note">
+                          K-means group: {action.clusterLabel}
+                          {action.clusterAdjustment ? ` (${action.clusterAdjustment > 0 ? "+" : ""}${action.clusterAdjustment} score)` : ""}
+                        </p>
+                      ) : null}
 
                       <div className="action-why">
                         {action.why.slice(0, 3).map((reason) => (
@@ -670,6 +641,7 @@ export default function Home() {
                         <small>
                           {match.vehicleProfile ?? "Compatible vehicle"} · {match.contractType ?? "spot market"}
                         </small>
+                        <small>{match.clusterLabel ?? "K-means baseline cluster"}</small>
                       </div>
                       <div className="match-score">
                         <strong>{match.score}</strong>
@@ -757,6 +729,14 @@ export default function Home() {
                   <dt>Avg monthly cost</dt>
                   <dd>{formatShortCurrency(operationalSummary.avgMonthlyCost)}</dd>
                 </div>
+                <div>
+                  <dt>K-means fit</dt>
+                  <dd>{operationalSummary.avgClusterFit ?? 0}%</dd>
+                </div>
+                <div>
+                  <dt>Cluster boosted</dt>
+                  <dd>{operationalSummary.clusterBoostedMatches ?? 0}</dd>
+                </div>
               </dl>
             </section>
 
@@ -804,12 +784,12 @@ export default function Home() {
             </section>
           </aside>
         </section>
-      ) : view === "retail" ? (
+      ) : (
         <section className="retail-grid" aria-label="Airport retail optimisation workspace">
           <aside className="panel control-panel" aria-label="Retail route controls">
             <div className="section-title">
               <ShoppingBag size={18} />
-              <h2>Route Clusters</h2>
+              <h2>Passenger Routes</h2>
             </div>
 
             <div className="corridor-list">
@@ -907,135 +887,6 @@ export default function Home() {
               value="Same stores"
               delta="Higher revenue from existing airport retail infrastructure"
             />
-          </aside>
-        </section>
-      ) : (
-        <section className="cluster-grid" aria-label="AI K-means clustering workspace">
-          <aside className="panel control-panel" aria-label="Cluster domain selector">
-            <div className="section-title">
-              <Database size={18} />
-              <h2>K-Means Domains</h2>
-            </div>
-
-            <div className="corridor-list">
-              {clusterData.domains.map((domain) => (
-                <button
-                  key={domain.domain}
-                  type="button"
-                  className={selectedClusterDomain === domain.domain ? "corridor-row is-selected" : "corridor-row"}
-                  onClick={() => setSelectedClusterDomain(domain.domain)}
-                >
-                  <span>{domain.title}</span>
-                  <small>{domain.clusters.length} clusters · {domain.features.length} features</small>
-                </button>
-              ))}
-            </div>
-
-            <div className="retail-note">
-              <ShieldCheck size={18} />
-              <span>{clusterData.refreshPolicy}</span>
-            </div>
-          </aside>
-
-          <section className="cluster-board">
-            <div className="panel cluster-hero">
-              <div>
-                <p className="eyebrow">{clusterData.model}</p>
-                <h2>{selectedCluster.title}</h2>
-                <p>{selectedCluster.description}</p>
-              </div>
-              <div className="cluster-summary-grid">
-                <span>
-                  <strong>{selectedCluster.clusters.length}</strong>
-                  clusters
-                </span>
-                <span>
-                  <strong>{totalClusterRows.toLocaleString("en-IN")}</strong>
-                  rows grouped
-                </span>
-                <span>
-                  <strong>{selectedCluster.features.length}</strong>
-                  features
-                </span>
-              </div>
-            </div>
-
-            <div className="cluster-card-grid">
-              {selectedCluster.clusters.map((cluster) => (
-                <article className="cluster-card" key={cluster.id}>
-                  <div className="cluster-card-title">
-                    <div>
-                      <strong>{cluster.label}</strong>
-                      <span>{cluster.size.toLocaleString("en-IN")} records</span>
-                    </div>
-                    <Database size={18} />
-                  </div>
-
-                  <p>{cluster.insight}</p>
-
-                  <div className="cluster-centroid">
-                    {selectedCluster.features.slice(0, 6).map((feature) => (
-                      <span key={`${cluster.id}-${feature.key}`}>
-                        <strong>{formatClusterValue(feature.key, cluster.centroid[feature.key])}</strong>
-                        {feature.label}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="cluster-members">
-                    {cluster.members.slice(0, 4).map((member) => (
-                      <div key={`${cluster.id}-${member.id}`}>
-                        <strong>{member.label}</strong>
-                        <small>{member.detail}</small>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <aside className="right-rail" aria-label="Clustering usage guide">
-            <section className="panel operational-panel">
-              <div className="section-title">
-                <Route size={18} />
-                <h2>How To Use</h2>
-              </div>
-              <dl className="operational-grid">
-                <div>
-                  <dt>Routes</dt>
-                  <dd>Pick lane strategy</dd>
-                </div>
-                <div>
-                  <dt>Customers</dt>
-                  <dd>Prioritise demand</dd>
-                </div>
-                <div>
-                  <dt>Shipments</dt>
-                  <dd>Tune matching rules</dd>
-                </div>
-                <div>
-                  <dt>Vehicles</dt>
-                  <dd>Select partners</dd>
-                </div>
-                <div>
-                  <dt>Passengers</dt>
-                  <dd>Plan retail mix</dd>
-                </div>
-              </dl>
-            </section>
-
-            <section className="panel economics-panel">
-              <div className="section-title">
-                <SlidersHorizontal size={18} />
-                <h2>Feature Set</h2>
-              </div>
-              <div className="feature-chip-list">
-                {selectedCluster.features.map((feature) => (
-                  <span key={feature.key}>{feature.label}</span>
-                ))}
-              </div>
-            </section>
           </aside>
         </section>
       )}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from clustering import build_clusters
+from clustering import build_shipment_cluster_lookup
 from optimizer import optimise_corridor
 from repository import find_corridor, load_dataset
 
@@ -31,6 +31,7 @@ class CapacityIQBackendTest(unittest.TestCase):
             self.assertIn("contractType", first_shipment)
 
     def test_optimiser_returns_business_metrics(self) -> None:
+        dataset = load_dataset()
         corridor = find_corridor("northeast")
         self.assertIsNotNone(corridor)
 
@@ -40,6 +41,7 @@ class CapacityIQBackendTest(unittest.TestCase):
             anchor_multiplier=1.0,
             max_detour=120,
             guardrail=74,
+            cluster_lookup=build_shipment_cluster_lookup(dataset),
         )
 
         self.assertGreater(result["matchedTonnes"], 0)
@@ -47,8 +49,12 @@ class CapacityIQBackendTest(unittest.TestCase):
         self.assertGreater(result["emptyKmAvoided"], 0)
         self.assertIn("operationalSummary", result)
         self.assertGreater(result["operationalSummary"]["avgDriverScore"], 0)
+        self.assertGreater(result["operationalSummary"]["avgClusterFit"], 0)
+        self.assertGreaterEqual(result["operationalSummary"]["clusterBoostedMatches"], 0)
         self.assertIn("road", result["remaining"])
         self.assertGreater(len(result["accepted"]), 0)
+        self.assertIn("clusterLabel", result["accepted"][0])
+        self.assertIn("clusterFit", result["accepted"][0])
         self.assertGreater(len(result["recommendedActions"]), 0)
         first_action = result["recommendedActions"][0]
         self.assertGreater(first_action["matchedTonnes"], 0)
@@ -56,21 +62,19 @@ class CapacityIQBackendTest(unittest.TestCase):
         self.assertGreaterEqual(len(first_action["route"]), 2)
         self.assertIn("assignedVehicle", first_action)
         self.assertIn("schedulePlan", first_action)
+        self.assertIn("clusterLabel", first_action)
 
-    def test_kmeans_clusters_cover_operational_domains(self) -> None:
+    def test_kmeans_lookup_covers_shipments_used_by_optimizer(self) -> None:
         dataset = load_dataset()
-        clusters = build_clusters(dataset)
-        domains = {domain["domain"]: domain for domain in clusters["domains"]}
+        lookup = build_shipment_cluster_lookup(dataset)
 
-        self.assertEqual(
-            {"routes", "customers", "shipments", "vehicles", "passengers"},
-            set(domains.keys()),
-        )
-        for domain in domains.values():
-            self.assertGreaterEqual(len(domain["clusters"]), 3)
-            self.assertGreater(len(domain["features"]), 0)
-            self.assertGreater(domain["clusters"][0]["size"], 0)
-            self.assertIn("insight", domain["clusters"][0])
+        self.assertGreaterEqual(len(lookup), 2000)
+        first_shipment = dataset["corridors"][0]["shipments"][0]
+        profile = lookup[first_shipment["id"]]
+        self.assertIn("label", profile)
+        self.assertIn("fit", profile)
+        self.assertIn("adjustment", profile)
+        self.assertIn("insight", profile)
 
 
 if __name__ == "__main__":

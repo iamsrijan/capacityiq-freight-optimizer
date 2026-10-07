@@ -78,8 +78,14 @@ export type ScoredShipment = Shipment & {
     routeFamiliarityFit: number;
     contractFit: number;
     scheduleFit: number;
+    clusterFit?: number;
+    clusterAdjustment?: number;
   };
   riskFlags?: string[];
+  clusterLabel?: string;
+  clusterFit?: number;
+  clusterAdjustment?: number;
+  clusterInsight?: string;
 };
 
 export type RecommendedAction = {
@@ -107,6 +113,10 @@ export type RecommendedAction = {
   compatibilityNote?: string;
   schedulePlan?: string;
   riskFlags?: string[];
+  clusterLabel?: string;
+  clusterFit?: number;
+  clusterAdjustment?: number;
+  clusterInsight?: string;
 };
 
 export type RetailProfile = {
@@ -118,37 +128,6 @@ export type RetailProfile = {
   baseRevenue: number;
   compliance: string;
   assortments: Array<{ label: string; share: number; uplift: number }>;
-};
-
-export type ClusterMember = {
-  id: string;
-  label: string;
-  detail: string;
-  metrics: Record<string, number | string | null | undefined>;
-};
-
-export type KMeansCluster = {
-  id: string;
-  label: string;
-  size: number;
-  centroid: Record<string, number>;
-  insight: string;
-  members: ClusterMember[];
-};
-
-export type ClusterDomain = {
-  domain: "routes" | "customers" | "shipments" | "vehicles" | "passengers";
-  title: string;
-  description: string;
-  model: string;
-  features: Array<{ key: string; label: string }>;
-  clusters: KMeansCluster[];
-};
-
-export type ClusterResult = {
-  model: string;
-  refreshPolicy: string;
-  domains: ClusterDomain[];
 };
 
 export type BackendSummary = {
@@ -186,6 +165,8 @@ export type OptimizationResult = {
     airClearanceBreaches: number;
     strictCompatibilityRejected: number;
     avgMonthlyCost: number;
+    avgClusterFit?: number;
+    clusterBoostedMatches?: number;
   };
   remaining: Partial<Record<Mode, number>>;
   modeUtilisation?: ModeUtilizationResult[];

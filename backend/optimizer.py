@@ -205,7 +205,8 @@ def build_recommended_actions(
                 "routeText": " -> ".join(route),
                 "operatingInstruction": instruction_for(corridor, shipment, max_detour),
                 "why": [
-                    f"Score {shipment['score']} from route fit, reliability, revenue, cargo fit and operating quality",
+                    f"Score {shipment['score']} from route fit, reliability, revenue, cargo fit, operating quality and K-means cluster fit",
+                    f"K-means group: {shipment.get('clusterLabel', 'standard shipment cluster')} with {round(float(shipment.get('clusterFit', 0)) * 100)}% cluster fit",
                     f"{shipment['detourKm']} km detour is within the {max_detour} km policy",
                     f"{shipment['compatibility']} cargo clears the {guardrail}% compatibility guardrail",
                     f"{shipment.get('contractType', 'spot market')} with driver score {shipment.get('driverScore', 78)} and {shipment.get('routeFamiliarityTrips', 0)} prior route trips",
@@ -224,6 +225,10 @@ def build_recommended_actions(
                 "compatibilityNote": shipment.get("compatibilityNote"),
                 "schedulePlan": schedule_plan_for(shipment, max_clearance_minutes),
                 "riskFlags": shipment.get("riskFlags", []),
+                "clusterLabel": shipment.get("clusterLabel"),
+                "clusterFit": shipment.get("clusterFit"),
+                "clusterAdjustment": shipment.get("clusterAdjustment"),
+                "clusterInsight": shipment.get("clusterInsight"),
             }
         )
 
@@ -237,6 +242,7 @@ def score_shipment(
     min_driver_score: int,
     max_clearance_minutes: int,
     prefer_contracted: bool,
+    cluster_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     route_fit = max(0, 1 - as_int(shipment["detourKm"]) / max(max_detour, 1))
     reliability_fit = as_int(shipment["reliability"]) / 100
@@ -248,6 +254,8 @@ def score_shipment(
     route_familiarity_fit = min(as_int(shipment.get("routeFamiliarityTrips")) / 50, 1)
     contract_strength = contract_fit(shipment)
     timing_fit = schedule_fit(shipment, max_clearance_minutes)
+    cluster_fit = float(cluster_profile.get("fit", 0.72)) if cluster_profile else 0.72
+    cluster_adjustment = int(cluster_profile.get("adjustment", 0)) if cluster_profile else 0
     guardrail_penalty = ((guardrail - 50) / 50) * (1 - compatibility_fit) * 22
     driver_penalty = max(0, min_driver_score - as_int(shipment.get("driverScore"), 78)) * 0.35
     contract_penalty = 5 if prefer_contracted and shipment.get("contractType") == "spot market" else 0
@@ -264,6 +272,7 @@ def score_shipment(
         + route_familiarity_fit * 6
         + contract_strength * 4
         + timing_fit * 2
+        + cluster_adjustment
         - guardrail_penalty
         - driver_penalty
         - contract_penalty
@@ -281,7 +290,13 @@ def score_shipment(
             "routeFamiliarityFit": round(route_familiarity_fit, 2),
             "contractFit": round(contract_strength, 2),
             "scheduleFit": round(timing_fit, 2),
+            "clusterFit": round(cluster_fit, 2),
+            "clusterAdjustment": cluster_adjustment,
         },
+        "clusterLabel": cluster_profile.get("label") if cluster_profile else "Scenario baseline cluster",
+        "clusterFit": round(cluster_fit, 2),
+        "clusterAdjustment": cluster_adjustment,
+        "clusterInsight": cluster_profile.get("insight") if cluster_profile else "No K-means segment was available for this shipment.",
         "riskFlags": shipment_risk_flags(
             shipment,
             min_driver_score,
@@ -326,6 +341,10 @@ def build_operational_summary(
             if item.get("reason") in {"Cargo segregation risk too high", "Guardrail confidence too low"}
         ),
         "avgMonthlyCost": round(sum(as_int(item.get("avgMonthlyCost")) for item in accepted) / accepted_count),
+        "avgClusterFit": round(
+            sum(float(item.get("clusterFit", 0.72)) for item in accepted) / accepted_count * 100
+        ),
+        "clusterBoostedMatches": sum(1 for item in accepted if as_int(item.get("clusterAdjustment")) > 0),
     }
 
 
@@ -338,6 +357,7 @@ def optimise_corridor(
     min_driver_score: int = 72,
     max_clearance_minutes: int = 360,
     prefer_contracted: bool = True,
+    cluster_lookup: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     anchor_factor = anchor_multiplier if anchor_enabled else 0.54
     available_by_mode: dict[str, int] = {}
@@ -353,6 +373,7 @@ def optimise_corridor(
 
     scored = []
     for shipment in corridor["shipments"]:
+        cluster_profile = (cluster_lookup or {}).get(str(shipment["id"]))
         scoring = score_shipment(
             shipment,
             max_detour,
@@ -360,6 +381,7 @@ def optimise_corridor(
             min_driver_score,
             max_clearance_minutes,
             prefer_contracted,
+            cluster_profile,
         )
         scored.append(
             {
@@ -367,6 +389,10 @@ def optimise_corridor(
                 "score": scoring["score"],
                 "scoring": scoring["scoring"],
                 "riskFlags": scoring["riskFlags"],
+                "clusterLabel": scoring["clusterLabel"],
+                "clusterFit": scoring["clusterFit"],
+                "clusterAdjustment": scoring["clusterAdjustment"],
+                "clusterInsight": scoring["clusterInsight"],
                 "matchedTonnes": 0,
                 "reason": "",
             }
