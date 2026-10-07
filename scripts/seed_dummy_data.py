@@ -237,6 +237,125 @@ CARGO_TEMPLATES = [
     ("Durable snacks overflow", "road", "ambient", 3000, 4700),
 ]
 
+CARGO_RULES = {
+    "Packaged tea cartons": {
+        "family": "food-grade dry",
+        "vehicle": "Food-grade dry van",
+        "segment": "anchor-compatible FMCG backhaul",
+        "incompatible": "cement|chemicals|hazardous",
+        "note": "Can ride with packaged food and dry FMCG cargo.",
+    },
+    "Bamboo panels and handicrafts": {
+        "family": "fragile craft",
+        "vehicle": "Padded box truck with staging buffer",
+        "segment": "fragile regional exports",
+        "incompatible": "cement|heavy machinery|wet cargo",
+        "note": "Needs bracing and should avoid dusty or heavy loads.",
+    },
+    "Reverse logistics parcels": {
+        "family": "parcel returns",
+        "vehicle": "Parcel cage vehicle",
+        "segment": "reverse logistics",
+        "incompatible": "loose food|hazardous",
+        "note": "Works well in staged consolidation waves.",
+    },
+    "Regulated pharma samples": {
+        "family": "regulated pharma",
+        "vehicle": "Validated secure pharma uplift",
+        "segment": "regulated high-value urgent",
+        "incompatible": "food|cement|chemicals|unsecured parcels",
+        "note": "Needs chain-of-custody and compliance clearance.",
+    },
+    "Speciality ginger and citrus": {
+        "family": "fresh produce",
+        "vehicle": "Ventilated reefer truck",
+        "segment": "perishable agriculture",
+        "incompatible": "cement|chemicals|odour cargo",
+        "note": "Requires food-safe handling and temperature discipline.",
+    },
+    "Containerised export overflow": {
+        "family": "container export",
+        "vehicle": "Sealed container feeder",
+        "segment": "bulk export overflow",
+        "incompatible": "loose perishable|fragile craft",
+        "note": "Best suited to feeder or port-linked consolidation.",
+    },
+    "Textile bales": {
+        "family": "textile dry",
+        "vehicle": "Dry van with moisture guard",
+        "segment": "dry industrial backhaul",
+        "incompatible": "wet cargo|chemicals",
+        "note": "Needs dry handling and moisture protection.",
+    },
+    "Spice cartons": {
+        "family": "food-grade dry",
+        "vehicle": "Food-grade dry van",
+        "segment": "ambient food exports",
+        "incompatible": "cement|chemicals|odour cargo",
+        "note": "Compatible with packaged food when odour control is maintained.",
+    },
+    "Medical devices": {
+        "family": "regulated devices",
+        "vehicle": "Secure high-value air cargo",
+        "segment": "regulated high-value urgent",
+        "incompatible": "cement|chemicals|unsealed food",
+        "note": "Needs secure handling and documented custody.",
+    },
+    "Premium craft consignments": {
+        "family": "fragile craft",
+        "vehicle": "Padded box truck with staging buffer",
+        "segment": "premium fragile exports",
+        "incompatible": "cement|heavy machinery|wet cargo",
+        "note": "Needs gentle handling and staging protection.",
+    },
+    "Electronics returns": {
+        "family": "electronics",
+        "vehicle": "Secure parcel truck",
+        "segment": "high-value reverse logistics",
+        "incompatible": "wet cargo|magnetic cargo|loose food",
+        "note": "Needs dry, secure movement and claims control.",
+    },
+    "Frozen bakery inputs": {
+        "family": "chilled food",
+        "vehicle": "Reefer truck",
+        "segment": "temperature-controlled food",
+        "incompatible": "ambient dry cargo|cement|chemicals",
+        "note": "Needs temperature-controlled carriage.",
+    },
+    "Coffee and cocoa sacks": {
+        "family": "food-grade dry",
+        "vehicle": "Dry container with odour guard",
+        "segment": "bulk food export",
+        "incompatible": "cement|chemicals|odour cargo",
+        "note": "Can consolidate with dry food cargo.",
+    },
+    "High value samples": {
+        "family": "secured samples",
+        "vehicle": "Secure air cargo pouch",
+        "segment": "high-value urgent",
+        "incompatible": "bulk cargo|unsecured parcels",
+        "note": "Needs secure handling and tight handoff control.",
+    },
+    "Durable snacks overflow": {
+        "family": "food-grade dry",
+        "vehicle": "Food-grade dry van",
+        "segment": "anchor-compatible FMCG overflow",
+        "incompatible": "cement|chemicals|wet cargo",
+        "note": "Highly compatible with Britannia-style packaged food lanes.",
+    },
+}
+
+CONTRACT_TYPES = [
+    "dedicated fleet",
+    "fixed monthly",
+    "SLA contract",
+    "per-tonne contract",
+    "per-trip contract",
+    "spot market",
+]
+
+PEAK_WINDOWS = ["06:00-10:00", "10:00-14:00", "14:00-22:00", "22:00-02:00"]
+
 
 RETAIL_PROFILES = [
     {
@@ -502,6 +621,7 @@ def make_shipments(rng: random.Random) -> list[dict[str, object]]:
     for corridor in CORRIDORS:
         for index in range(200):
             cargo, mode, compatibility, revenue_low, revenue_high = rng.choice(CARGO_TEMPLATES)
+            cargo_rule = CARGO_RULES[cargo]
             low, high = mode_tonnes[mode]
             tonnes = rng.randint(low, high)
             revenue_per_ton = rng.randrange(revenue_low, revenue_high + 1, 100)
@@ -514,6 +634,33 @@ def make_shipments(rng: random.Random) -> list[dict[str, object]]:
             shipper = f"{rng.choice(shipper_prefixes)} {rng.choice(shipper_suffixes)}"
             origin = rng.choice(corridor["origins"])
             destination = rng.choice(corridor["destinations"])
+            contract_type = rng.choices(
+                CONTRACT_TYPES,
+                weights=[12, 18, 20, 18, 18, 14],
+                k=1,
+            )[0]
+            driver_score = min(99, max(58, int(rng.gauss(84 if contract_type != "spot market" else 78, 7))))
+            route_familiarity = max(0, int(rng.triangular(0, 96, 28 if mode == "road" else 16)))
+            handling_minutes = rng.randint(35, 100)
+            security_minutes = rng.randint(45, 180) if mode == "air" or compatibility == "regulated" else rng.randint(10, 45)
+            customs_minutes = rng.randint(30, 240) if mode in {"air", "sea"} or "port" in destination.lower() else rng.randint(0, 35)
+            layover_minutes = rng.randint(45, 360) if mode == "air" else rng.randint(0, 90)
+
+            if mode == "air":
+                base_transit_hours = 5 + layover_minutes / 60 + (handling_minutes + security_minutes + customs_minutes) / 60
+                airport_pair = f"{origin[:3].upper()}-DEL/BOM gateway"
+            elif mode == "sea":
+                base_transit_hours = max(36, float(corridor["distance_km"]) / 13) + customs_minutes / 90
+                airport_pair = ""
+            elif mode == "staging":
+                base_transit_hours = max(18, float(corridor["distance_km"]) / 25) + handling_minutes / 80
+                airport_pair = ""
+            else:
+                base_transit_hours = max(10, (float(corridor["distance_km"]) + detour_km) / 34)
+                airport_pair = ""
+
+            avg_transit_hours = round(base_transit_hours + rng.uniform(-2.5, 5.5), 1)
+            monthly_cost = round(tonnes * revenue_per_ton * rng.uniform(2.2, 4.8), -3)
 
             rows.append(
                 {
@@ -521,6 +668,7 @@ def make_shipments(rng: random.Random) -> list[dict[str, object]]:
                     "corridor_id": corridor["id"],
                     "shipper": shipper,
                     "cargo": cargo,
+                    "cargo_family": cargo_rule["family"],
                     "origin": origin,
                     "destination": destination,
                     "tonnes": tonnes,
@@ -534,6 +682,21 @@ def make_shipments(rng: random.Random) -> list[dict[str, object]]:
                     "priority": rng.choice(["backhaul", "premium", "overflow", "return", "spot", "contract"]),
                     "pickup_window": pickup.isoformat(),
                     "delivery_window": delivery.isoformat(),
+                    "vehicle_profile": cargo_rule["vehicle"],
+                    "driver_score": driver_score,
+                    "route_familiarity_trips": route_familiarity,
+                    "contract_type": contract_type,
+                    "avg_transit_hours": avg_transit_hours,
+                    "avg_monthly_cost": int(monthly_cost),
+                    "peak_window": rng.choice(PEAK_WINDOWS),
+                    "handling_minutes": handling_minutes,
+                    "security_minutes": security_minutes,
+                    "customs_minutes": customs_minutes,
+                    "layover_minutes": layover_minutes,
+                    "airport_pair": airport_pair,
+                    "customer_segment": cargo_rule["segment"],
+                    "compatibility_note": cargo_rule["note"],
+                    "incompatible_with": cargo_rule["incompatible"],
                 }
             )
             shipment_number += 1
@@ -656,6 +819,7 @@ def main() -> None:
             "corridor_id",
             "shipper",
             "cargo",
+            "cargo_family",
             "origin",
             "destination",
             "tonnes",
@@ -669,6 +833,21 @@ def main() -> None:
             "priority",
             "pickup_window",
             "delivery_window",
+            "vehicle_profile",
+            "driver_score",
+            "route_familiarity_trips",
+            "contract_type",
+            "avg_transit_hours",
+            "avg_monthly_cost",
+            "peak_window",
+            "handling_minutes",
+            "security_minutes",
+            "customs_minutes",
+            "layover_minutes",
+            "airport_pair",
+            "customer_segment",
+            "compatibility_note",
+            "incompatible_with",
         ],
         make_shipments(rng),
     )

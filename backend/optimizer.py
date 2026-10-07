@@ -2,8 +2,69 @@ from __future__ import annotations
 
 from typing import Any
 
-from config import COMPATIBILITY_FIT, MODE_TARGET_FILL
+from config import CARGO_FAMILY_FIT, COMPATIBILITY_FIT, CONTRACT_FIT, MODE_TARGET_FILL
 from utils import as_int
+
+
+def clamp_percent(value: float) -> float:
+    return max(0, min(1, value))
+
+
+def clearance_minutes(shipment: dict[str, Any]) -> int:
+    return (
+        as_int(shipment.get("handlingMinutes"))
+        + as_int(shipment.get("securityMinutes"))
+        + as_int(shipment.get("customsMinutes"))
+        + as_int(shipment.get("layoverMinutes"))
+    )
+
+
+def cargo_family_fit(shipment: dict[str, Any]) -> float:
+    return CARGO_FAMILY_FIT.get(str(shipment.get("cargoFamily", "")), 0.76)
+
+
+def contract_fit(shipment: dict[str, Any]) -> float:
+    return CONTRACT_FIT.get(str(shipment.get("contractType", "spot market")), 0.68)
+
+
+def schedule_fit(shipment: dict[str, Any], max_clearance_minutes: int) -> float:
+    if shipment.get("mode") != "air" and shipment.get("compatibility") != "regulated":
+        return 1
+
+    clearance = clearance_minutes(shipment)
+    if max_clearance_minutes <= 0:
+        return 0
+
+    soft_target = max_clearance_minutes * 0.5
+    overage = max(0, clearance - soft_target)
+    return clamp_percent(1 - overage / max(max_clearance_minutes, 1))
+
+
+def shipment_risk_flags(
+    shipment: dict[str, Any],
+    min_driver_score: int,
+    max_clearance_minutes: int,
+    prefer_contracted: bool,
+) -> list[str]:
+    flags = []
+    driver_score = as_int(shipment.get("driverScore"), 78)
+    route_trips = as_int(shipment.get("routeFamiliarityTrips"))
+    clearance = clearance_minutes(shipment)
+    family_fit = cargo_family_fit(shipment)
+    contract_type = str(shipment.get("contractType", "spot market"))
+
+    if driver_score < min_driver_score:
+        flags.append("Driver score below scenario floor")
+    if route_trips < 8:
+        flags.append("Low route familiarity")
+    if family_fit < 0.68:
+        flags.append("Strict cargo segregation needed")
+    if shipment.get("mode") == "air" and clearance > max_clearance_minutes:
+        flags.append("Airport clearance exceeds scenario cap")
+    if prefer_contracted and contract_type == "spot market":
+        flags.append("Spot-market capacity")
+
+    return flags
 
 
 def route_anchor_node(label: str) -> str:
@@ -68,25 +129,45 @@ def instruction_for(corridor: dict[str, Any], shipment: dict[str, Any], max_deto
     mode = str(shipment["mode"])
     tonnes = as_int(shipment["matchedTonnes"])
     cargo = str(shipment["cargo"]).lower()
+    vehicle = shipment.get("vehicleProfile") or "compatible vehicle"
+    driver_score = as_int(shipment.get("driverScore"), 78)
+    route_trips = as_int(shipment.get("routeFamiliarityTrips"))
 
     if mode == "air":
         return (
-            f"Book {tonnes} t of {cargo} into the next belly-cargo window and keep road movement "
-            "limited to first and last mile transfers."
+            f"Book {tonnes} t of {cargo} into {vehicle.lower()} with a {driver_score} driver score "
+            "and keep road movement limited to first and last mile transfers."
         )
     if mode == "sea":
         return (
-            f"Batch {tonnes} t of {cargo} through the feeder or port linkage and use the corridor "
-            "only for drayage and consolidation."
+            f"Batch {tonnes} t of {cargo} through {vehicle.lower()} and use the corridor only for "
+            "drayage and consolidation."
         )
     if mode == "staging":
         return (
-            f"Stage {tonnes} t of {cargo} at the consolidation buffer, then release it with the "
-            "next compatible dispatch wave."
+            f"Stage {tonnes} t of {cargo} in {vehicle.lower()}, then release it with the next "
+            "compatible dispatch wave."
         )
     return (
-        f"Assign {tonnes} t of {cargo} to return truck capacity on {corridor['returnLane']} with "
-        f"a detour cap of {max_detour} km."
+        f"Assign {tonnes} t of {cargo} to {vehicle.lower()} on {corridor['returnLane']} with "
+        f"a detour cap of {max_detour} km and {route_trips} prior route trips."
+    )
+
+
+def schedule_plan_for(shipment: dict[str, Any], max_clearance_minutes: int) -> str:
+    clearance = clearance_minutes(shipment)
+    peak_window = shipment.get("peakWindow") or "next dispatch wave"
+
+    if shipment.get("mode") == "air":
+        airport_pair = shipment.get("airportPair") or "nearest cargo gateway"
+        return (
+            f"{airport_pair}; peak window {peak_window}; {clearance} min handling/security/customs "
+            f"against {max_clearance_minutes} min cap."
+        )
+
+    return (
+        f"Dispatch in {peak_window}; historical transit {shipment.get('avgTransitHours', 0)} h; "
+        f"{clearance} min handling buffer."
     )
 
 
@@ -96,6 +177,7 @@ def build_recommended_actions(
     available_by_mode: dict[str, int],
     max_detour: int,
     guardrail: int,
+    max_clearance_minutes: int,
 ) -> list[dict[str, Any]]:
     actions = []
     for index, shipment in enumerate(accepted[:6], start=1):
@@ -123,37 +205,128 @@ def build_recommended_actions(
                 "routeText": " -> ".join(route),
                 "operatingInstruction": instruction_for(corridor, shipment, max_detour),
                 "why": [
-                    f"Score {shipment['score']} from route fit, reliability, revenue and urgency",
+                    f"Score {shipment['score']} from route fit, reliability, revenue, cargo fit and operating quality",
                     f"{shipment['detourKm']} km detour is within the {max_detour} km policy",
                     f"{shipment['compatibility']} cargo clears the {guardrail}% compatibility guardrail",
-                    f"{shipment['window']} service window with {shipment['reliability']}% reliability",
+                    f"{shipment.get('contractType', 'spot market')} with driver score {shipment.get('driverScore', 78)} and {shipment.get('routeFamiliarityTrips', 0)} prior route trips",
+                    f"{shipment.get('window')} service window with {shipment['reliability']}% reliability",
                 ],
                 "revenue": revenue,
                 "emptyKmAvoided": empty_km,
                 "capacityShare": capacity_share,
                 "timing": f"Pickup {shipment.get('pickupWindow', shipment['window'])}; deliver by {shipment.get('deliveryWindow', shipment['window'])}",
+                "assignedVehicle": shipment.get("vehicleProfile"),
+                "driverScore": as_int(shipment.get("driverScore"), 78),
+                "routeFamiliarityTrips": as_int(shipment.get("routeFamiliarityTrips")),
+                "contractType": shipment.get("contractType"),
+                "averageTransitHours": shipment.get("avgTransitHours"),
+                "averageMonthlyCost": as_int(shipment.get("avgMonthlyCost")),
+                "compatibilityNote": shipment.get("compatibilityNote"),
+                "schedulePlan": schedule_plan_for(shipment, max_clearance_minutes),
+                "riskFlags": shipment.get("riskFlags", []),
             }
         )
 
     return actions
 
 
-def score_shipment(shipment: dict[str, Any], max_detour: int, guardrail: int) -> int:
+def score_shipment(
+    shipment: dict[str, Any],
+    max_detour: int,
+    guardrail: int,
+    min_driver_score: int,
+    max_clearance_minutes: int,
+    prefer_contracted: bool,
+) -> dict[str, Any]:
     route_fit = max(0, 1 - as_int(shipment["detourKm"]) / max(max_detour, 1))
     reliability_fit = as_int(shipment["reliability"]) / 100
     revenue_fit = min(as_int(shipment["revenuePerTon"]) / 12000, 1)
     urgency_fit = as_int(shipment["urgency"]) / 100
     compatibility_fit = COMPATIBILITY_FIT.get(str(shipment["compatibility"]), 0.5)
+    family_fit = cargo_family_fit(shipment)
+    driver_fit = as_int(shipment.get("driverScore"), 78) / 100
+    route_familiarity_fit = min(as_int(shipment.get("routeFamiliarityTrips")) / 50, 1)
+    contract_strength = contract_fit(shipment)
+    timing_fit = schedule_fit(shipment, max_clearance_minutes)
     guardrail_penalty = ((guardrail - 50) / 50) * (1 - compatibility_fit) * 22
+    driver_penalty = max(0, min_driver_score - as_int(shipment.get("driverScore"), 78)) * 0.35
+    contract_penalty = 5 if prefer_contracted and shipment.get("contractType") == "spot market" else 0
+    clearance_penalty = max(0, clearance_minutes(shipment) - max_clearance_minutes) / 60 * 4
 
-    return round(
-        route_fit * 32
-        + reliability_fit * 24
-        + compatibility_fit * 22
-        + revenue_fit * 15
-        + urgency_fit * 7
+    score = round(
+        route_fit * 22
+        + reliability_fit * 17
+        + compatibility_fit * 13
+        + family_fit * 12
+        + revenue_fit * 10
+        + urgency_fit * 6
+        + driver_fit * 8
+        + route_familiarity_fit * 6
+        + contract_strength * 4
+        + timing_fit * 2
         - guardrail_penalty
+        - driver_penalty
+        - contract_penalty
+        - clearance_penalty
     )
+
+    return {
+        "score": max(0, min(100, score)),
+        "scoring": {
+            "routeFit": round(route_fit, 2),
+            "reliabilityFit": round(reliability_fit, 2),
+            "compatibilityFit": round(compatibility_fit, 2),
+            "cargoFit": round(family_fit, 2),
+            "driverFit": round(driver_fit, 2),
+            "routeFamiliarityFit": round(route_familiarity_fit, 2),
+            "contractFit": round(contract_strength, 2),
+            "scheduleFit": round(timing_fit, 2),
+        },
+        "riskFlags": shipment_risk_flags(
+            shipment,
+            min_driver_score,
+            max_clearance_minutes,
+            prefer_contracted,
+        ),
+    }
+
+
+def build_operational_summary(
+    accepted: list[dict[str, Any]],
+    declined: list[dict[str, Any]],
+    max_clearance_minutes: int,
+) -> dict[str, Any]:
+    accepted_count = max(len(accepted), 1)
+    contracted = [
+        item
+        for item in accepted
+        if item.get("contractType") and item.get("contractType") != "spot market"
+    ]
+    compatibility_cleared = [
+        item
+        for item in accepted
+        if "Strict cargo segregation needed" not in item.get("riskFlags", [])
+    ]
+
+    return {
+        "avgDriverScore": round(sum(as_int(item.get("driverScore"), 78) for item in accepted) / accepted_count),
+        "avgRouteFamiliarityTrips": round(
+            sum(as_int(item.get("routeFamiliarityTrips")) for item in accepted) / accepted_count
+        ),
+        "contractedShare": round((len(contracted) / accepted_count) * 100),
+        "compatibilityCleared": round((len(compatibility_cleared) / accepted_count) * 100),
+        "airClearanceBreaches": sum(
+            1
+            for item in declined
+            if item.get("mode") == "air" and clearance_minutes(item) > max_clearance_minutes
+        ),
+        "strictCompatibilityRejected": sum(
+            1
+            for item in declined
+            if item.get("reason") in {"Cargo segregation risk too high", "Guardrail confidence too low"}
+        ),
+        "avgMonthlyCost": round(sum(as_int(item.get("avgMonthlyCost")) for item in accepted) / accepted_count),
+    }
 
 
 def optimise_corridor(
@@ -162,6 +335,9 @@ def optimise_corridor(
     anchor_multiplier: float,
     max_detour: int,
     guardrail: int,
+    min_driver_score: int = 72,
+    max_clearance_minutes: int = 360,
+    prefer_contracted: bool = True,
 ) -> dict[str, Any]:
     anchor_factor = anchor_multiplier if anchor_enabled else 0.54
     available_by_mode: dict[str, int] = {}
@@ -177,10 +353,20 @@ def optimise_corridor(
 
     scored = []
     for shipment in corridor["shipments"]:
+        scoring = score_shipment(
+            shipment,
+            max_detour,
+            guardrail,
+            min_driver_score,
+            max_clearance_minutes,
+            prefer_contracted,
+        )
         scored.append(
             {
                 **shipment,
-                "score": score_shipment(shipment, max_detour, guardrail),
+                "score": scoring["score"],
+                "scoring": scoring["scoring"],
+                "riskFlags": scoring["riskFlags"],
                 "matchedTonnes": 0,
                 "reason": "",
             }
@@ -195,7 +381,12 @@ def optimise_corridor(
         mode = shipment["mode"]
         mode_remaining = remaining_bookable.get(mode, 0)
         incompatible = guardrail >= 82 and shipment["compatibility"] in {"chilled", "regulated"}
+        cargo_blocked = guardrail >= 82 and cargo_family_fit(shipment) < 0.68
         detour_blocked = shipment["mode"] != "air" and as_int(shipment["detourKm"]) > max_detour
+        driver_blocked = as_int(shipment.get("driverScore"), 78) < min_driver_score
+        clearance_blocked = (
+            shipment["mode"] == "air" and clearance_minutes(shipment) > max_clearance_minutes
+        )
 
         if mode_remaining <= 0:
             declined.append({**shipment, "reason": "No capacity left in this mode"})
@@ -203,6 +394,18 @@ def optimise_corridor(
 
         if detour_blocked:
             declined.append({**shipment, "reason": "Detour exceeds lane policy"})
+            continue
+
+        if driver_blocked:
+            declined.append({**shipment, "reason": "Driver score below scenario floor"})
+            continue
+
+        if clearance_blocked:
+            declined.append({**shipment, "reason": "Airport clearance window too tight"})
+            continue
+
+        if cargo_blocked:
+            declined.append({**shipment, "reason": "Cargo segregation risk too high"})
             continue
 
         if shipment["score"] < threshold or incompatible:
@@ -273,7 +476,9 @@ def optimise_corridor(
             available_by_mode,
             max_detour,
             guardrail,
+            max_clearance_minutes,
         ),
+        "operationalSummary": build_operational_summary(accepted, declined, max_clearance_minutes),
         "remaining": total_remaining,
         "modeUtilisation": mode_utilisation,
         "adjustedCapacity": adjusted_capacity,

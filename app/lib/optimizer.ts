@@ -8,6 +8,91 @@ import type {
   Shipment,
 } from "./types";
 
+const cargoFamilyFit: Record<string, number> = {
+  "food-grade dry": 1,
+  "chilled food": 0.88,
+  "fresh produce": 0.82,
+  "textile dry": 0.84,
+  "container export": 0.78,
+  "parcel returns": 0.74,
+  electronics: 0.72,
+  "fragile craft": 0.7,
+  "secured samples": 0.66,
+  "regulated pharma": 0.62,
+  "regulated devices": 0.62,
+};
+
+const contractFit: Record<string, number> = {
+  "dedicated fleet": 1,
+  "fixed monthly": 0.94,
+  "SLA contract": 0.92,
+  "per-tonne contract": 0.84,
+  "per-trip contract": 0.78,
+  "spot market": 0.68,
+};
+
+function clampPercent(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function clearanceMinutes(shipment: Shipment) {
+  return (
+    (shipment.handlingMinutes ?? 0) +
+    (shipment.securityMinutes ?? 0) +
+    (shipment.customsMinutes ?? 0) +
+    (shipment.layoverMinutes ?? 0)
+  );
+}
+
+function shipmentCargoFit(shipment: Shipment) {
+  return cargoFamilyFit[shipment.cargoFamily ?? ""] ?? 0.76;
+}
+
+function shipmentContractFit(shipment: Shipment) {
+  return contractFit[shipment.contractType ?? "spot market"] ?? 0.68;
+}
+
+function shipmentScheduleFit(shipment: Shipment, maxClearanceMinutes: number) {
+  if (shipment.mode !== "air" && shipment.compatibility !== "regulated") {
+    return 1;
+  }
+
+  const clearance = clearanceMinutes(shipment);
+  const softTarget = maxClearanceMinutes * 0.5;
+  const overage = Math.max(0, clearance - softTarget);
+  return clampPercent(1 - overage / Math.max(maxClearanceMinutes, 1));
+}
+
+function riskFlagsFor(
+  shipment: Shipment,
+  minDriverScore: number,
+  maxClearanceMinutes: number,
+  preferContracted: boolean,
+) {
+  const flags: string[] = [];
+  const driverScore = shipment.driverScore ?? 78;
+  const routeTrips = shipment.routeFamiliarityTrips ?? 0;
+  const familyFit = shipmentCargoFit(shipment);
+
+  if (driverScore < minDriverScore) {
+    flags.push("Driver score below scenario floor");
+  }
+  if (routeTrips < 8) {
+    flags.push("Low route familiarity");
+  }
+  if (familyFit < 0.68) {
+    flags.push("Strict cargo segregation needed");
+  }
+  if (shipment.mode === "air" && clearanceMinutes(shipment) > maxClearanceMinutes) {
+    flags.push("Airport clearance exceeds scenario cap");
+  }
+  if (preferContracted && shipment.contractType === "spot market") {
+    flags.push("Spot-market capacity");
+  }
+
+  return flags;
+}
+
 function routeAnchorNode(label: string) {
   return label.split("+")[0].split("/")[0].trim() || label;
 }
@@ -71,20 +156,34 @@ function routeNodesFor(corridor: Corridor, shipment: ScoredShipment) {
 
 function instructionFor(corridor: Corridor, shipment: ScoredShipment, maxDetour: number) {
   const cargo = shipment.cargo.toLowerCase();
+  const vehicle = shipment.vehicleProfile?.toLowerCase() ?? "compatible vehicle";
+  const driverScore = shipment.driverScore ?? 78;
+  const routeTrips = shipment.routeFamiliarityTrips ?? 0;
 
   if (shipment.mode === "air") {
-    return `Book ${shipment.matchedTonnes} t of ${cargo} into the next belly-cargo window and keep road movement limited to first and last mile transfers.`;
+    return `Book ${shipment.matchedTonnes} t of ${cargo} into ${vehicle} with a ${driverScore} driver score and keep road movement limited to first and last mile transfers.`;
   }
 
   if (shipment.mode === "sea") {
-    return `Batch ${shipment.matchedTonnes} t of ${cargo} through the feeder or port linkage and use the corridor only for drayage and consolidation.`;
+    return `Batch ${shipment.matchedTonnes} t of ${cargo} through ${vehicle} and use the corridor only for drayage and consolidation.`;
   }
 
   if (shipment.mode === "staging") {
-    return `Stage ${shipment.matchedTonnes} t of ${cargo} at the consolidation buffer, then release it with the next compatible dispatch wave.`;
+    return `Stage ${shipment.matchedTonnes} t of ${cargo} in ${vehicle}, then release it with the next compatible dispatch wave.`;
   }
 
-  return `Assign ${shipment.matchedTonnes} t of ${cargo} to return truck capacity on ${corridor.returnLane} with a detour cap of ${maxDetour} km.`;
+  return `Assign ${shipment.matchedTonnes} t of ${cargo} to ${vehicle} on ${corridor.returnLane} with a detour cap of ${maxDetour} km and ${routeTrips} prior route trips.`;
+}
+
+function schedulePlanFor(shipment: ScoredShipment, maxClearanceMinutes: number) {
+  const clearance = clearanceMinutes(shipment);
+  const peakWindow = shipment.peakWindow ?? "next dispatch wave";
+
+  if (shipment.mode === "air") {
+    return `${shipment.airportPair ?? "nearest cargo gateway"}; peak window ${peakWindow}; ${clearance} min handling/security/customs against ${maxClearanceMinutes} min cap.`;
+  }
+
+  return `Dispatch in ${peakWindow}; historical transit ${shipment.avgTransitHours ?? 0} h; ${clearance} min handling buffer.`;
 }
 
 function buildRecommendedActions(
@@ -93,6 +192,7 @@ function buildRecommendedActions(
   availableByMode: Map<Mode, number>,
   maxDetour: number,
   guardrail: number,
+  maxClearanceMinutes: number,
 ): RecommendedAction[] {
   return accepted.slice(0, 6).map((shipment, index) => {
     const route = routeNodesFor(corridor, shipment);
@@ -115,9 +215,10 @@ function buildRecommendedActions(
       routeText: route.join(" -> "),
       operatingInstruction: instructionFor(corridor, shipment, maxDetour),
       why: [
-        `Score ${shipment.score} from route fit, reliability, revenue and urgency`,
+        `Score ${shipment.score} from route fit, reliability, revenue, cargo fit and operating quality`,
         `${shipment.detourKm} km detour is within the ${maxDetour} km policy`,
         `${shipment.compatibility} cargo clears the ${guardrail}% compatibility guardrail`,
+        `${shipment.contractType ?? "spot market"} with driver score ${shipment.driverScore ?? 78} and ${shipment.routeFamiliarityTrips ?? 0} prior route trips`,
         `${shipment.window} service window with ${shipment.reliability}% reliability`,
       ],
       revenue,
@@ -126,11 +227,27 @@ function buildRecommendedActions(
       timing: `Pickup ${shipment.pickupWindow ?? shipment.window}; deliver by ${
         shipment.deliveryWindow ?? shipment.window
       }`,
+      assignedVehicle: shipment.vehicleProfile,
+      driverScore: shipment.driverScore ?? 78,
+      routeFamiliarityTrips: shipment.routeFamiliarityTrips ?? 0,
+      contractType: shipment.contractType,
+      averageTransitHours: shipment.avgTransitHours,
+      averageMonthlyCost: shipment.avgMonthlyCost,
+      compatibilityNote: shipment.compatibilityNote,
+      schedulePlan: schedulePlanFor(shipment, maxClearanceMinutes),
+      riskFlags: shipment.riskFlags ?? [],
     };
   });
 }
 
-function scoreShipment(shipment: Shipment, maxDetour: number, guardrail: number) {
+function scoreShipment(
+  shipment: Shipment,
+  maxDetour: number,
+  guardrail: number,
+  minDriverScore: number,
+  maxClearanceMinutes: number,
+  preferContracted: boolean,
+) {
   const routeFit = Math.max(0, 1 - shipment.detourKm / Math.max(maxDetour, 1));
   const reliabilityFit = shipment.reliability / 100;
   const revenueFit = Math.min(shipment.revenuePerTon / 12000, 1);
@@ -143,16 +260,79 @@ function scoreShipment(shipment: Shipment, maxDetour: number, guardrail: number)
         : shipment.compatibility === "regulated"
           ? 0.74
           : 0.42;
+  const cargoFit = shipmentCargoFit(shipment);
+  const driverFit = (shipment.driverScore ?? 78) / 100;
+  const routeFamiliarityFit = Math.min((shipment.routeFamiliarityTrips ?? 0) / 50, 1);
+  const contractStrength = shipmentContractFit(shipment);
+  const timingFit = shipmentScheduleFit(shipment, maxClearanceMinutes);
   const guardrailPenalty = ((guardrail - 50) / 50) * (1 - compatibilityFit) * 22;
+  const driverPenalty = Math.max(0, minDriverScore - (shipment.driverScore ?? 78)) * 0.35;
+  const contractPenalty = preferContracted && shipment.contractType === "spot market" ? 5 : 0;
+  const clearancePenalty = (Math.max(0, clearanceMinutes(shipment) - maxClearanceMinutes) / 60) * 4;
 
-  return Math.round(
-    routeFit * 32 +
-      reliabilityFit * 24 +
-      compatibilityFit * 22 +
-      revenueFit * 15 +
-      urgencyFit * 7 -
-      guardrailPenalty,
+  const score = Math.round(
+    routeFit * 22 +
+      reliabilityFit * 17 +
+      compatibilityFit * 13 +
+      cargoFit * 12 +
+      revenueFit * 10 +
+      urgencyFit * 6 +
+      driverFit * 8 +
+      routeFamiliarityFit * 6 +
+      contractStrength * 4 +
+      timingFit * 2 -
+      guardrailPenalty -
+      driverPenalty -
+      contractPenalty -
+      clearancePenalty,
   );
+
+  return {
+    score: Math.max(0, Math.min(100, score)),
+    scoring: {
+      routeFit: Number(routeFit.toFixed(2)),
+      reliabilityFit: Number(reliabilityFit.toFixed(2)),
+      compatibilityFit: Number(compatibilityFit.toFixed(2)),
+      cargoFit: Number(cargoFit.toFixed(2)),
+      driverFit: Number(driverFit.toFixed(2)),
+      routeFamiliarityFit: Number(routeFamiliarityFit.toFixed(2)),
+      contractFit: Number(contractStrength.toFixed(2)),
+      scheduleFit: Number(timingFit.toFixed(2)),
+    },
+    riskFlags: riskFlagsFor(shipment, minDriverScore, maxClearanceMinutes, preferContracted),
+  };
+}
+
+function buildOperationalSummary(
+  accepted: ScoredShipment[],
+  declined: ScoredShipment[],
+  maxClearanceMinutes: number,
+) {
+  const acceptedCount = Math.max(accepted.length, 1);
+  const contracted = accepted.filter((item) => item.contractType && item.contractType !== "spot market");
+  const compatibilityCleared = accepted.filter(
+    (item) => !(item.riskFlags ?? []).includes("Strict cargo segregation needed"),
+  );
+
+  return {
+    avgDriverScore: Math.round(
+      accepted.reduce((sum, item) => sum + (item.driverScore ?? 78), 0) / acceptedCount,
+    ),
+    avgRouteFamiliarityTrips: Math.round(
+      accepted.reduce((sum, item) => sum + (item.routeFamiliarityTrips ?? 0), 0) / acceptedCount,
+    ),
+    contractedShare: Math.round((contracted.length / acceptedCount) * 100),
+    compatibilityCleared: Math.round((compatibilityCleared.length / acceptedCount) * 100),
+    airClearanceBreaches: declined.filter(
+      (item) => item.mode === "air" && clearanceMinutes(item) > maxClearanceMinutes,
+    ).length,
+    strictCompatibilityRejected: declined.filter((item) =>
+      ["Cargo segregation risk too high", "Guardrail confidence too low"].includes(item.reason),
+    ).length,
+    avgMonthlyCost: Math.round(
+      accepted.reduce((sum, item) => sum + (item.avgMonthlyCost ?? 0), 0) / acceptedCount,
+    ),
+  };
 }
 
 export function optimizeCorridor(
@@ -161,6 +341,9 @@ export function optimizeCorridor(
   anchorMultiplier: number,
   maxDetour: number,
   guardrail: number,
+  minDriverScore = 72,
+  maxClearanceMinutes = 360,
+  preferContracted = true,
 ): OptimizationResult {
   const anchorFactor = anchorEnabled ? anchorMultiplier : 0.54;
   const availableByMode = new Map<Mode, number>();
@@ -175,12 +358,25 @@ export function optimizeCorridor(
   });
 
   const scored = corridor.shipments
-    .map((shipment) => ({
-      ...shipment,
-      score: scoreShipment(shipment, maxDetour, guardrail),
-      matchedTonnes: 0,
-      reason: "",
-    }))
+    .map((shipment) => {
+      const scoring = scoreShipment(
+        shipment,
+        maxDetour,
+        guardrail,
+        minDriverScore,
+        maxClearanceMinutes,
+        preferContracted,
+      );
+
+      return {
+        ...shipment,
+        score: scoring.score,
+        scoring: scoring.scoring,
+        riskFlags: scoring.riskFlags,
+        matchedTonnes: 0,
+        reason: "",
+      };
+    })
     .sort((a, b) => b.score - a.score);
 
   const accepted: ScoredShipment[] = [];
@@ -192,7 +388,10 @@ export function optimizeCorridor(
     const incompatible =
       guardrail >= 82 &&
       (shipment.compatibility === "chilled" || shipment.compatibility === "regulated");
+    const cargoBlocked = guardrail >= 82 && shipmentCargoFit(shipment) < 0.68;
     const detourBlocked = shipment.mode !== "air" && shipment.detourKm > maxDetour;
+    const driverBlocked = (shipment.driverScore ?? 78) < minDriverScore;
+    const clearanceBlocked = shipment.mode === "air" && clearanceMinutes(shipment) > maxClearanceMinutes;
 
     if (modeRemaining <= 0) {
       declined.push({ ...shipment, reason: "No capacity left in this mode" });
@@ -201,6 +400,21 @@ export function optimizeCorridor(
 
     if (detourBlocked) {
       declined.push({ ...shipment, reason: "Detour exceeds lane policy" });
+      return;
+    }
+
+    if (driverBlocked) {
+      declined.push({ ...shipment, reason: "Driver score below scenario floor" });
+      return;
+    }
+
+    if (clearanceBlocked) {
+      declined.push({ ...shipment, reason: "Airport clearance window too tight" });
+      return;
+    }
+
+    if (cargoBlocked) {
+      declined.push({ ...shipment, reason: "Cargo segregation risk too high" });
       return;
     }
 
@@ -254,7 +468,9 @@ export function optimizeCorridor(
       availableByMode,
       maxDetour,
       guardrail,
+      maxClearanceMinutes,
     ),
+    operationalSummary: buildOperationalSummary(accepted, declined, maxClearanceMinutes),
     remaining: Object.fromEntries(totalRemaining) as Partial<Record<Mode, number>>,
     adjustedCapacity,
     matchedTonnes,

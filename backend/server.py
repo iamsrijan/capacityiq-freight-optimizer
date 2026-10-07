@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
+from clustering import build_clusters
 from config import API_ENDPOINTS
 from optimizer import optimise_corridor
 from repository import DATASET, dataset_summary, find_corridor
@@ -93,6 +94,10 @@ class CapacityIQHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"count": len(DATASET["partners"]), "rows": apply_limit(DATASET["partners"], query)})
             return
 
+        if path == "/api/clusters":
+            self._send_json(200, build_clusters(DATASET))
+            return
+
         if path == "/api/tables":
             self._send_json(200, dataset_summary())
             return
@@ -125,6 +130,9 @@ class CapacityIQHandler(BaseHTTPRequestHandler):
             as_float(payload.get("anchorMultiplier", 1), 1),
             as_int(payload.get("maxDetour", 120), 120),
             as_int(payload.get("guardrail", 74), 74),
+            as_int(payload.get("minDriverScore", 72), 72),
+            as_int(payload.get("maxClearanceMinutes", 360), 360),
+            bool(payload.get("preferContracted", True)),
         )
         self._send_json(200, {"corridor": corridor, "result": result})
 

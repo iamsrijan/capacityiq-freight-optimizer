@@ -16,6 +16,7 @@ export type Shipment = {
   id: string;
   shipper: string;
   cargo: string;
+  cargoFamily?: string;
   origin: string;
   destination: string;
   tonnes: number;
@@ -29,6 +30,21 @@ export type Shipment = {
   priority?: string;
   pickupWindow?: string;
   deliveryWindow?: string;
+  vehicleProfile?: string;
+  driverScore?: number;
+  routeFamiliarityTrips?: number;
+  contractType?: string;
+  avgTransitHours?: number;
+  avgMonthlyCost?: number;
+  peakWindow?: string;
+  handlingMinutes?: number;
+  securityMinutes?: number;
+  customsMinutes?: number;
+  layoverMinutes?: number;
+  airportPair?: string;
+  customerSegment?: string;
+  compatibilityNote?: string;
+  incompatibleWith?: string[];
 };
 
 export type Corridor = {
@@ -53,6 +69,17 @@ export type ScoredShipment = Shipment & {
   score: number;
   matchedTonnes: number;
   reason: string;
+  scoring?: {
+    routeFit: number;
+    reliabilityFit: number;
+    compatibilityFit: number;
+    cargoFit: number;
+    driverFit: number;
+    routeFamiliarityFit: number;
+    contractFit: number;
+    scheduleFit: number;
+  };
+  riskFlags?: string[];
 };
 
 export type RecommendedAction = {
@@ -71,6 +98,15 @@ export type RecommendedAction = {
   emptyKmAvoided: number;
   capacityShare: number;
   timing: string;
+  assignedVehicle?: string;
+  driverScore?: number;
+  routeFamiliarityTrips?: number;
+  contractType?: string;
+  averageTransitHours?: number;
+  averageMonthlyCost?: number;
+  compatibilityNote?: string;
+  schedulePlan?: string;
+  riskFlags?: string[];
 };
 
 export type RetailProfile = {
@@ -82,6 +118,37 @@ export type RetailProfile = {
   baseRevenue: number;
   compliance: string;
   assortments: Array<{ label: string; share: number; uplift: number }>;
+};
+
+export type ClusterMember = {
+  id: string;
+  label: string;
+  detail: string;
+  metrics: Record<string, number | string | null | undefined>;
+};
+
+export type KMeansCluster = {
+  id: string;
+  label: string;
+  size: number;
+  centroid: Record<string, number>;
+  insight: string;
+  members: ClusterMember[];
+};
+
+export type ClusterDomain = {
+  domain: "routes" | "customers" | "shipments" | "vehicles" | "passengers";
+  title: string;
+  description: string;
+  model: string;
+  features: Array<{ key: string; label: string }>;
+  clusters: KMeansCluster[];
+};
+
+export type ClusterResult = {
+  model: string;
+  refreshPolicy: string;
+  domains: ClusterDomain[];
 };
 
 export type BackendSummary = {
@@ -111,6 +178,15 @@ export type OptimizationResult = {
   accepted: ScoredShipment[];
   declined: ScoredShipment[];
   recommendedActions?: RecommendedAction[];
+  operationalSummary?: {
+    avgDriverScore: number;
+    avgRouteFamiliarityTrips: number;
+    contractedShare: number;
+    compatibilityCleared: number;
+    airClearanceBreaches: number;
+    strictCompatibilityRejected: number;
+    avgMonthlyCost: number;
+  };
   remaining: Partial<Record<Mode, number>>;
   modeUtilisation?: ModeUtilizationResult[];
   adjustedCapacity: number;
@@ -129,6 +205,9 @@ export type NetworkInputs = {
   anchorMultiplier: number;
   maxDetour: number;
   guardrail: number;
+  minDriverScore: number;
+  maxClearanceMinutes: number;
+  preferContracted: boolean;
 };
 
 export type MetricIcon = LucideIcon;

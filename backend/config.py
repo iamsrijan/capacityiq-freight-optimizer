@@ -22,6 +22,29 @@ MODE_TARGET_FILL = {
     "staging": 0.88,
 }
 
+CARGO_FAMILY_FIT = {
+    "food-grade dry": 1.0,
+    "chilled food": 0.88,
+    "fresh produce": 0.82,
+    "textile dry": 0.84,
+    "container export": 0.78,
+    "parcel returns": 0.74,
+    "electronics": 0.72,
+    "fragile craft": 0.7,
+    "secured samples": 0.66,
+    "regulated pharma": 0.62,
+    "regulated devices": 0.62,
+}
+
+CONTRACT_FIT = {
+    "dedicated fleet": 1.0,
+    "fixed monthly": 0.94,
+    "SLA contract": 0.92,
+    "per-tonne contract": 0.84,
+    "per-trip contract": 0.78,
+    "spot market": 0.68,
+}
+
 API_ENDPOINTS = [
     "/api/health",
     "/api/corridors",
@@ -31,6 +54,7 @@ API_ENDPOINTS = [
     "/api/retail-profiles",
     "/api/hubs",
     "/api/partners",
+    "/api/clusters",
     "/api/tables",
     "/api/optimise",
 ]

@@ -9,6 +9,9 @@ export const initialNetworkInputs: NetworkInputs = {
   anchorMultiplier: 1,
   maxDetour: 120,
   guardrail: 74,
+  minDriverScore: 72,
+  maxClearanceMinutes: 360,
+  preferContracted: true,
 };
 
 export const modeTargetFill: Record<Mode, number> = {
@@ -24,6 +27,9 @@ export function sameNetworkInputs(first: NetworkInputs, second: NetworkInputs) {
     first.anchorEnabled === second.anchorEnabled &&
     first.anchorMultiplier === second.anchorMultiplier &&
     first.maxDetour === second.maxDetour &&
-    first.guardrail === second.guardrail
+    first.guardrail === second.guardrail &&
+    first.minDriverScore === second.minDriverScore &&
+    first.maxClearanceMinutes === second.maxClearanceMinutes &&
+    first.preferContracted === second.preferContracted
   );
 }

@@ -6,12 +6,13 @@ The freight example uses Britannia as the anchor demand partner. Britannia creat
 
 ## What The Application Does
 
-The application has two workspaces.
+The application has three workspaces.
 
 | Workspace | Purpose | Main Output |
 | --- | --- | --- |
 | Freight Optimisation | Match cargo demand with unused road, air, sea, and staging capacity | Empty kilometres avoided, matched cargo, unlocked revenue, load factor, and guardrail queue |
 | Airport Retail Optimisation | Match product mix with passenger route demand | Product allocation, uplift estimate, optimised revenue, and store productivity message |
+| AI K-Means Clustering | Group similar routes, customers, shipments, vehicle/operators, and passenger profiles | Cluster labels, centroid values, representative records, and business-use insights |
 
 The core thesis is simple:
 
@@ -52,6 +53,67 @@ The core thesis is simple:
 | 3 | Product allocation board | Shows how store space should be assigned |
 | 4 | Sales uplift | Shows expected uplift from better assortment matching |
 | 5 | Retail metrics | Shows flights, revenue, and asset productivity |
+
+## Detailed Application Walkthrough
+
+### 1. Freight Workspace
+
+Use the Freight tab to simulate how the marketplace fills unused freight capacity. Start by selecting a corridor from the left panel. The selected corridor changes the route, shipment pool, available road/air/sea/staging capacity, and anchor assumptions.
+
+The controls mean:
+
+| Control | Meaning | What Changes |
+| --- | --- | --- |
+| Corridor | Operating lane being analysed | Changes source/destination, shipment candidates, capacity, and route map |
+| Britannia anchor | Whether predictable anchor demand is active | Enabled uses normal anchor factor; disabled reduces available network density |
+| Anchor volume | Anchor demand multiplier | Higher values increase adjusted capacity and anchor tonnes |
+| Max detour | Maximum non-air route deviation | Lower values reject more loads; higher values allow more flexible matching |
+| Compatibility guardrail | Strictness for cargo fit and risk | Higher values reject risky cargo such as chilled/regulated loads more aggressively |
+| Driver score floor | Minimum acceptable driver/handler quality | Low-score operators are sent to the Guardrail Queue |
+| Air clearance cap | Maximum handling + security + customs + layover window | Air shipments breaching the cap are rejected |
+| Prefer contracted capacity | Whether spot-market loads are penalised | Contracted or SLA capacity scores higher than spot capacity |
+
+After changing inputs, select **Run optimiser**. The app sends the applied scenario to `/api/optimise`. The KPI cards update with empty kilometres avoided, matched tonnes, revenue unlocked, and unit cost reduction. The Action Recommendations panel explains exactly what cargo should move, which route it should follow, which vehicle profile should carry it, what driver score is used, what contract type applies, and why the match was accepted.
+
+The Guardrail Queue is not an error list. It is the list of loads the optimiser chose not to carry in this scenario because capacity, detour, driver score, clearance time, or compatibility did not clear the rules.
+
+### 2. Airport Retail Workspace
+
+Use the Airport retail tab to show that the same optimisation idea applies outside freight. Instead of trucks and shipments, the app uses passenger-route profiles and product assortment. Select a passenger route cluster such as Africa, UK, Saudi, Domestic Metro, or North America. Then adjust Passenger signal to simulate stronger or weaker passenger demand.
+
+The layout board changes the recommended product-space mix. The revenue card shows how better route-aware merchandising can increase revenue from the same airport shops without adding major CAPEX.
+
+### 3. AI Clusters Workspace
+
+Use the AI clusters tab to explain where machine learning fits. The backend runs deterministic K-means clustering across five domains:
+
+| Domain | What Is Grouped | Business Use |
+| --- | --- | --- |
+| Routes | Corridors with similar distance, capacity, empty-km exposure, and demand density | Decide lane strategy and where backhaul discovery matters most |
+| Customers | Shippers with similar volume, urgency, revenue, reliability, and compliance exposure | Prioritise customers and identify anchor-like demand |
+| Shipments | Loads with similar tonnes, value, detour, urgency, cargo fit, and clearance pressure | Tune matching rules and operating guardrails |
+| Vehicles | Transport partners/operators with similar fleet size, mode coverage, on-time rate, cancellation, and claims | Select reliable capacity for sensitive moves |
+| Passengers | Airport passenger route profiles with similar flights, revenue, assortment, and uplift | Plan retail inventory and merchandising |
+
+Each cluster card shows:
+
+| Area | Meaning |
+| --- | --- |
+| Cluster label | Human-readable name derived from the centroid, such as `High-value urgent cargo` |
+| Records | Number of rows grouped into that cluster |
+| Insight | What planners should do with that cluster |
+| Centroid values | Average feature values for the cluster |
+| Members | Representative records inside the cluster |
+
+K-means does not replace the optimiser. It adds segmentation. The recommended architecture is:
+
+```text
+CSV / ERP / TMS / GPS / POS data
+  -> K-means segmentation
+  -> segment labels and centroid signals
+  -> scoring optimiser and capacity allocation
+  -> recommended action, route, vehicle, timing, and business impact
+```
 
 ## Local Setup
 
@@ -105,6 +167,7 @@ The app uses these backend calls:
 | App loads | `GET http://127.0.0.1:8000/api/corridors` |
 | App loads | `GET http://127.0.0.1:8000/api/retail-profiles` |
 | App loads | `GET http://127.0.0.1:8000/api/health` |
+| App loads | `GET http://127.0.0.1:8000/api/clusters` |
 | Select Run optimiser after changing freight inputs | `POST http://127.0.0.1:8000/api/optimise` |
 
 You can also verify this in the browser developer tools under the Network tab, or by opening the backend health endpoint directly:
@@ -134,6 +197,7 @@ http://127.0.0.1:8000/api/health
 | Styling | CSS with Tailwind import | Full dashboard layout, responsive behaviour, cards, buttons, route map, and sliders |
 | Icons | lucide-react | Clean interface icons for transport, metrics, controls, and retail |
 | Backend API | Python standard library HTTP server | Easy to run locally without installing extra Python packages |
+| AI segmentation | Python deterministic K-means | Groups similar routes, customers, shipments, vehicle/operators, and passenger profiles without external ML dependencies |
 | Data storage | CSV files | Simple table format that business and data teams can inspect or replace |
 | Package scripts | Node.js and npm | Single command workflow for local development and verification |
 
@@ -188,6 +252,7 @@ curl http://127.0.0.1:8000/api/health
 | `GET` | `/api/retail-profiles` | Airport retail route profiles and assortment rules |
 | `GET` | `/api/hubs?limit=50` | Hub table rows |
 | `GET` | `/api/partners?limit=50` | Partner table rows |
+| `GET` | `/api/clusters` | K-means clusters for routes, customers, shipments, vehicle/operators, and passenger retail profiles |
 | `POST` | `/api/optimise` | Run the backend freight optimiser |
 | `POST` | `/api/optimize` | Same as `/api/optimise` for US spelling |
 
@@ -201,7 +266,10 @@ curl -X POST http://127.0.0.1:8000/api/optimise \
     "anchorEnabled": true,
     "anchorMultiplier": 1,
     "maxDetour": 120,
-    "guardrail": 74
+    "guardrail": 74,
+    "minDriverScore": 72,
+    "maxClearanceMinutes": 360,
+    "preferContracted": true
   }'
 ```
 
@@ -218,6 +286,7 @@ The optimiser returns:
 | `modeUtilisation` | Used, remaining, and utilisation by mode |
 | `bookableTonnes` | Tonnes the optimiser is allowed to allocate after operating reserve |
 | `reserveTonnes` | Capacity held back for service reliability, slot risk, and operational buffer |
+| `operationalSummary` | Driver, route familiarity, contract, compatibility, and air-clearance summary |
 | `matchedTonnes` | Total tonnes matched |
 | `revenue` | Estimated revenue unlocked |
 | `emptyKmAvoided` | Empty kilometres avoided |
@@ -225,6 +294,20 @@ The optimiser returns:
 | `loadFactor` | Return capacity load factor |
 | `unitCostDrop` | Estimated freight unit cost reduction |
 | `anchorTonnes` | Anchor demand volume used in the optimiser run |
+
+### K-Means Cluster Response Shape
+
+`GET /api/clusters` returns:
+
+| Field | Meaning |
+| --- | --- |
+| `model` | The clustering method used, currently K-means |
+| `refreshPolicy` | Explains when the clusters are recomputed |
+| `domains` | Route, customer, shipment, vehicle/operator, and passenger cluster sections |
+| `domains[].features` | Feature list used for that domain |
+| `domains[].clusters` | Cluster cards with label, size, centroid, insight, and representative members |
+| `domains[].clusters[].centroid` | Average feature values for that cluster |
+| `domains[].clusters[].members` | Example records assigned to the cluster |
 
 ## How The App Recommends Routes, Products, And Quantity
 
@@ -284,8 +367,16 @@ Each shipment receives a score before capacity is allocated.
 | `revenueFit` | `min(revenuePerTon / 12000, 1)` |
 | `urgencyFit` | `urgency / 100` |
 | `compatibilityFit` | Value from the compatibility table below |
+| `cargoFit` | Value from cargo-family compatibility: food-grade dry scores highest, regulated or secured cargo scores lower unless handled separately |
+| `driverFit` | `driverScore / 100` |
+| `routeFamiliarityFit` | `min(routeFamiliarityTrips / 50, 1)` |
+| `contractFit` | Contract strength value: dedicated/fixed/SLA capacity scores above spot-market capacity |
+| `scheduleFit` | `1` for simple non-air moves; for air or regulated moves it reduces when handling + security + customs + layover exceeds the clearance cap |
 | `guardrailPenalty` | `((guardrail - 50) / 50) * (1 - compatibilityFit) * 22` |
-| `score` | `round(routeFit * 32 + reliabilityFit * 24 + compatibilityFit * 22 + revenueFit * 15 + urgencyFit * 7 - guardrailPenalty)` |
+| `driverPenalty` | `max(0, minDriverScore - driverScore) * 0.35` |
+| `contractPenalty` | `5` when contracted capacity is preferred and the shipment is spot-market, otherwise `0` |
+| `clearancePenalty` | `max(0, clearanceMinutes - maxClearanceMinutes) / 60 * 4` |
+| `score` | `round(routeFit * 22 + reliabilityFit * 17 + compatibilityFit * 13 + cargoFit * 12 + revenueFit * 10 + urgencyFit * 6 + driverFit * 8 + routeFamiliarityFit * 6 + contractFit * 4 + scheduleFit * 2 - guardrailPenalty - driverPenalty - contractPenalty - clearancePenalty)` |
 
 Compatibility fit values:
 
@@ -304,6 +395,9 @@ Compatibility fit values:
 | Minimum acceptance score | `threshold = max(55, guardrail - 12)` |
 | Capacity check | Reject if no bookable capacity remains in the shipment mode |
 | Detour check | Reject non-air shipments when `detourKm > maxDetour` |
+| Driver check | Reject when `driverScore < minDriverScore` |
+| Air clearance check | Reject air shipments when `handlingMinutes + securityMinutes + customsMinutes + layoverMinutes > maxClearanceMinutes` |
+| Cargo segregation check | Reject lower-fit cargo families when strict guardrails are active |
 | Score check | Reject when `score < threshold` |
 | Strict guardrail check | Reject `chilled` or `regulated` cargo when `guardrail >= 82` |
 
@@ -342,6 +436,19 @@ Accepted shipments are processed from highest score to lowest score. A shipment 
 | `actionEmptyKmAvoided` | `round((matchedTonnes / vehicleEquivalentTonnes) * max(120, distanceKm - detourKm))` |
 | `capacityShare` | `round(matchedTonnes / availableCapacityForMode * 100)` |
 | `routeText` | Corridor-aware route nodes joined with `->` |
+| `schedulePlan` | Peak window plus handling/security/customs/layover buffer against the scenario clearance cap |
+| `compatibilityNote` | Cargo-family note explaining whether the shipment can ride with food-grade anchor freight |
+
+### Operational Intelligence Summary
+
+| Output | Formula |
+| --- | --- |
+| `avgDriverScore` | Average driver score across accepted matches |
+| `avgRouteFamiliarityTrips` | Average previous trips on similar routes across accepted matches |
+| `contractedShare` | Accepted non-spot-market matches / accepted matches |
+| `compatibilityCleared` | Accepted matches without strict cargo segregation flags / accepted matches |
+| `airClearanceBreaches` | Count of declined air shipments exceeding the clearance cap |
+| `avgMonthlyCost` | Average historical monthly cost across accepted matches |
 
 ## Frontend Data Flow
 
@@ -350,10 +457,11 @@ The frontend starts with embedded sample data so the app can still open if the b
 1. `/api/corridors`
 2. `/api/retail-profiles`
 3. `/api/health`
+4. `/api/clusters`
 
-After loading succeeds, the top status bar shows the CSV shipment count. Freight controls act as draft network inputs. When the user selects Run optimiser, the frontend posts the visible corridor, anchor, detour, and guardrail settings to `/api/optimise`. The backend returns the displayed accepted matches, rejected queue, mode utilisation, revenue, empty kilometres avoided, cost saved, load factor, and unit cost impact.
+After loading succeeds, the top status bar shows the CSV shipment count. Freight controls act as draft network inputs. When the user selects Run optimiser, the frontend posts the visible corridor, anchor, detour, guardrail, driver score floor, air clearance cap, and contracted-capacity preference to `/api/optimise`. The backend returns the displayed accepted matches, rejected queue, mode utilisation, revenue, empty kilometres avoided, cost saved, load factor, unit cost impact, operational intelligence summary, and action-level vehicle/driver/contract/schedule recommendations.
 
-If backend loading or backend optimisation fails, the app displays fallback status text and continues to work with the smaller embedded browser-side model.
+If backend loading or backend optimisation fails, the app displays fallback status text and continues to work with the smaller embedded browser-side model and fallback cluster examples.
 
 Capacity Inventory bars show matched tonnes against operationally available capacity. The backend also keeps mode-specific reserves, so road, air, sea, and staging do not automatically show 100% utilisation just because demand exists.
 
@@ -366,7 +474,7 @@ capacityiq-freight-optimizer/
     components/
       Metric.tsx          Reusable KPI card component
     data/
-      fallback-data.ts    Browser fallback corridors and retail profiles
+      fallback-data.ts    Browser fallback corridors, retail profiles, and cluster examples
     lib/
       api.ts              Backend API client functions
       config.ts           Frontend constants and initial network inputs
@@ -378,6 +486,7 @@ capacityiq-freight-optimizer/
     globals.css           Dashboard styling and responsive layout
   backend/
     config.py             Backend constants, endpoints, and mode reserve settings
+    clustering.py         Deterministic K-means clustering for routes, customers, shipments, vehicles, and passengers
     repository.py         CSV loading and dataset lookup functions
     optimizer.py          Freight scoring and capacity allocation logic
     server.py             Thin local HTTP API entrypoint
@@ -407,11 +516,12 @@ capacityiq-freight-optimizer/
 
 | Function Or Object | File | Called By | Purpose |
 | --- | --- | --- | --- |
-| `Home` | `app/page.tsx` | React page runtime | Owns screen state, loads backend data, chooses Freight or Airport retail view, and renders the dashboard |
+| `Home` | `app/page.tsx` | React page runtime | Owns screen state, loads backend data, chooses Freight, Airport retail, or AI clusters view, and renders the dashboard |
 | `useEffect(loadBackendData)` | `app/page.tsx` | `Home` | Calls `fetchInitialDashboardData` and stores loaded CSV-backed data |
 | `useEffect(loadBackendOptimization)` | `app/page.tsx` | `Home` | Calls `fetchBackendOptimization` for the applied freight inputs |
-| `fetchInitialDashboardData` | `app/lib/api.ts` | `Home` | Fetches corridors, retail profiles, and dataset health |
+| `fetchInitialDashboardData` | `app/lib/api.ts` | `Home` | Fetches corridors, retail profiles, dataset health, and K-means clusters |
 | `fetchBackendOptimization` | `app/lib/api.ts` | `Home` | Posts the applied freight inputs to `/api/optimise` |
+| `formatClusterValue` | `app/page.tsx` | AI clusters view | Formats centroid values as counts, percentages, or short currency |
 | `scoreShipment` | `app/lib/optimizer.ts` | `optimizeCorridor` | Browser fallback scoring only, used if the backend is unavailable |
 | `optimizeCorridor` | `app/lib/optimizer.ts` | `Home` through `useMemo` | Browser fallback optimiser only, used if the backend is unavailable |
 | `routeNodesFor` | `app/lib/optimizer.ts` | `buildRecommendedActions` | Builds browser fallback route sequences from corridor and shipment fields |
@@ -420,7 +530,7 @@ capacityiq-freight-optimizer/
 | `formatCurrency` | `app/lib/formatters.ts` | Metric and row render logic | Formats rupee values in Indian currency style |
 | `formatShortCurrency` | `app/lib/formatters.ts` | Metric cards | Shortens currency into lakh and crore labels |
 | `Metric` | `app/components/Metric.tsx` | `Home` | Reusable KPI card component |
-| `corridors`, `retailProfiles` | `app/data/fallback-data.ts` | `Home` | Local fallback data used when the backend is unavailable |
+| `corridors`, `retailProfiles`, `fallbackClusters` | `app/data/fallback-data.ts` | `Home` | Local fallback data used when the backend is unavailable |
 
 ### Backend Functions
 
@@ -428,6 +538,9 @@ capacityiq-freight-optimizer/
 | --- | --- | --- | --- |
 | `read_csv_table` | `backend/repository.py` | `load_dataset` | Reads a CSV table from `backend/data` |
 | `load_dataset` | `backend/repository.py` | Repository startup and tests | Loads all CSV tables and converts them into API-ready objects |
+| `run_kmeans` | `backend/clustering.py` | `summarise_clusters` | Runs deterministic K-means on standardised feature vectors |
+| `summarise_clusters` | `backend/clustering.py` | `build_clusters` | Converts cluster assignments into UI-ready cluster cards |
+| `build_clusters` | `backend/clustering.py` | `GET /api/clusters` | Builds route, customer, shipment, vehicle/operator, and passenger clusters |
 | `score_shipment` | `backend/optimizer.py` | `optimise_corridor` | Scores shipment candidates using the backend version of the scoring logic |
 | `route_nodes_for` | `backend/optimizer.py` | `build_recommended_actions` | Builds the recommended route sequence from shipment origin, corridor waypoints, and shipment destination |
 | `instruction_for` | `backend/optimizer.py` | `build_recommended_actions` | Creates mode-specific operating instructions for road, air, sea, and staging cargo |
@@ -458,10 +571,15 @@ capacityiq-freight-optimizer/
 | Move Anchor volume | `setAnchorMultiplier` | Updates the draft anchor tonnes assumption |
 | Move Max detour | `setMaxDetour` | Updates the draft route flexibility policy |
 | Move Compatibility guardrail | `setGuardrail` | Updates the draft compatibility threshold |
+| Move Driver score floor | `setMinDriverScore` | Rejects operators below the selected quality floor |
+| Move Air clearance cap | `setMaxClearanceMinutes` | Rejects air cargo whose handling, security, customs, and layover time exceeds the cap |
+| Toggle Prefer contracted capacity | `setPreferContracted` | Penalises spot-market capacity when the optimiser scores loads |
 | Select Run optimiser | `setAppliedNetworkInputs` | Applies the visible draft inputs and requests backend optimisation |
 | Switch to Airport retail | `setView` | Shows the retail optimisation workspace |
 | Select a retail route cluster | `setSelectedRetailId` | Changes product allocation and passenger profile |
 | Move Passenger signal | `setPassengerWave` | Changes sales uplift and optimised revenue estimate |
+| Switch to AI clusters | `setView` | Shows K-means route, customer, shipment, vehicle/operator, and passenger clusters |
+| Select a cluster domain | `setSelectedClusterDomain` | Changes which K-means segmentation result is displayed |
 
 ## Production Extension
 
@@ -485,6 +603,7 @@ npm run test:backend
 npm run lint
 npm run build
 curl http://127.0.0.1:8000/api/tables
+curl http://127.0.0.1:8000/api/clusters
 curl -I http://localhost:3000/
 ```
 
@@ -496,6 +615,7 @@ Expected result:
 | Lint | No lint errors |
 | Build | Frontend build completes |
 | API tables | JSON table counts are returned |
+| API clusters | K-means domains are returned |
 | Frontend page | HTTP `200 OK` |
 
 ## Demo Study Documents

@@ -44,6 +44,7 @@ def load_dataset() -> dict[str, Any]:
                 "id": row["id"],
                 "shipper": row["shipper"],
                 "cargo": row["cargo"],
+                "cargoFamily": row.get("cargo_family", ""),
                 "origin": row["origin"],
                 "destination": row["destination"],
                 "tonnes": as_int(row["tonnes"]),
@@ -57,6 +58,25 @@ def load_dataset() -> dict[str, Any]:
                 "priority": row["priority"],
                 "pickupWindow": row["pickup_window"],
                 "deliveryWindow": row["delivery_window"],
+                "vehicleProfile": row.get("vehicle_profile", ""),
+                "driverScore": as_int(row.get("driver_score", 78), 78),
+                "routeFamiliarityTrips": as_int(row.get("route_familiarity_trips", 0), 0),
+                "contractType": row.get("contract_type", "spot market"),
+                "avgTransitHours": as_float(row.get("avg_transit_hours", 0), 0),
+                "avgMonthlyCost": as_int(row.get("avg_monthly_cost", 0), 0),
+                "peakWindow": row.get("peak_window", ""),
+                "handlingMinutes": as_int(row.get("handling_minutes", 0), 0),
+                "securityMinutes": as_int(row.get("security_minutes", 0), 0),
+                "customsMinutes": as_int(row.get("customs_minutes", 0), 0),
+                "layoverMinutes": as_int(row.get("layover_minutes", 0), 0),
+                "airportPair": row.get("airport_pair", ""),
+                "customerSegment": row.get("customer_segment", ""),
+                "compatibilityNote": row.get("compatibility_note", ""),
+                "incompatibleWith": [
+                    item.strip()
+                    for item in row.get("incompatible_with", "").split("|")
+                    if item.strip()
+                ],
             }
         )
 
