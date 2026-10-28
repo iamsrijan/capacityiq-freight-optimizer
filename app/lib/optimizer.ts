@@ -1,5 +1,6 @@
 import { modeTargetFill } from "./config";
 import type {
+  AirCarrier,
   Corridor,
   Mode,
   OptimizationResult,
@@ -38,6 +39,17 @@ type ShipmentClusterProfile = {
   insight: string;
 };
 
+type AirCarrierCandidate = {
+  carrier: AirCarrier;
+  estimatedCost: number;
+  totalClearanceMinutes: number;
+  priceFit: number;
+  accessFit: number;
+  fit: number;
+  adjustment: number;
+  tradeoff: string;
+};
+
 const shipmentClusterFeatures = [
   "tonnes",
   "revenuePerTon",
@@ -60,6 +72,114 @@ function clearanceMinutes(shipment: Shipment) {
     (shipment.customsMinutes ?? 0) +
     (shipment.layoverMinutes ?? 0)
   );
+}
+
+function carrierCoversCorridor(carrier: AirCarrier, corridorId: string) {
+  return carrier.corridorIds.includes("*") || carrier.corridorIds.includes(corridorId);
+}
+
+function carrierSupportsShipment(carrier: AirCarrier, shipment: Shipment) {
+  if (shipment.compatibility === "regulated" && !carrier.supportsRegulated) {
+    return false;
+  }
+  if (shipment.compatibility === "chilled" && !carrier.supportsColdChain) {
+    return false;
+  }
+  return true;
+}
+
+function rankAirCarriers(
+  corridorId: string,
+  shipment: Shipment,
+  carriers: AirCarrier[],
+  pricePriority: number,
+) {
+  const eligible = carriers.filter(
+    (carrier) => carrierCoversCorridor(carrier, corridorId) && carrierSupportsShipment(carrier, shipment),
+  );
+  if (!eligible.length) {
+    return [] as AirCarrierCandidate[];
+  }
+
+  const baseClearance = clearanceMinutes(shipment);
+  const raw = eligible.map((carrier) => ({
+    carrier,
+    estimatedCost: Math.round(
+      shipment.tonnes * 1000 * (carrier.ratePerKg + carrier.securityFeePerKg) + carrier.handlingFee,
+    ),
+    totalClearanceMinutes: baseClearance + carrier.transferMinutes + carrier.cutoffBufferMinutes,
+  }));
+  const minimumCost = Math.min(...raw.map((item) => item.estimatedCost));
+  const fastest = raw.reduce((best, item) =>
+    item.carrier.transferMinutes + item.carrier.cutoffBufferMinutes <
+    best.carrier.transferMinutes + best.carrier.cutoffBufferMinutes
+      ? item
+      : best,
+  );
+  const priority = clampPercent(pricePriority / 100);
+  const costWeight = 0.2 + priority * 0.35;
+  const accessWeight = 0.55 - priority * 0.35;
+
+  return raw
+    .map((item): AirCarrierCandidate => {
+      const priceFit = clampPercent(minimumCost / Math.max(item.estimatedCost, 1));
+      const distanceFit = clampPercent(1 - item.carrier.distanceFromCommonAreaKm / 40);
+      const transferFit = clampPercent(
+        1 - (item.carrier.transferMinutes + item.carrier.cutoffBufferMinutes) / 300,
+      );
+      const accessFit = distanceFit * 0.45 + transferFit * 0.55;
+      const reliabilityFit = item.carrier.onTimePercent / 100;
+      const cancellationFit = 1 - item.carrier.cancellationRatePercent / 100;
+      const fit = Number(
+        (
+          priceFit * costWeight +
+          accessFit * accessWeight +
+          reliabilityFit * 0.2 +
+          cancellationFit * 0.05
+        ).toFixed(3),
+      );
+      const savings = Math.max(0, fastest.estimatedCost - item.estimatedCost);
+      const extraMinutes = Math.max(
+        0,
+        item.carrier.transferMinutes +
+          item.carrier.cutoffBufferMinutes -
+          fastest.carrier.transferMinutes -
+          fastest.carrier.cutoffBufferMinutes,
+      );
+      const tradeoff =
+        item.carrier.id === fastest.carrier.id
+          ? `Fastest terminal access among eligible carriers at ${item.carrier.transferMinutes} transfer minutes.`
+          : `Saves ₹${savings.toLocaleString("en-IN")} versus the fastest eligible carrier for ${extraMinutes} additional terminal minutes.`;
+
+      return {
+        ...item,
+        priceFit,
+        accessFit: Number(accessFit.toFixed(3)),
+        fit,
+        adjustment: Math.round((fit - 0.68) * 12),
+        tradeoff,
+      };
+    })
+    .sort((first, second) => second.fit - first.fit);
+}
+
+function carrierFields(candidate?: AirCarrierCandidate) {
+  if (!candidate) {
+    return {};
+  }
+  return {
+    assignedCarrier: candidate.carrier.name,
+    carrierFacility: candidate.carrier.facility,
+    carrierRatePerKg: candidate.carrier.ratePerKg,
+    carrierDistanceKm: candidate.carrier.distanceFromCommonAreaKm,
+    carrierTransferMinutes: candidate.carrier.transferMinutes,
+    carrierCutoffBufferMinutes: candidate.carrier.cutoffBufferMinutes,
+    carrierTotalClearanceMinutes: candidate.totalClearanceMinutes,
+    estimatedCarrierCost: candidate.estimatedCost,
+    carrierFit: candidate.fit,
+    carrierAdjustment: candidate.adjustment,
+    carrierTradeoff: candidate.tradeoff,
+  };
 }
 
 function shipmentCargoFit(shipment: Shipment) {
@@ -225,12 +345,16 @@ function buildShipmentClusterLookup(shipments: Shipment[]) {
   );
 }
 
-function shipmentScheduleFit(shipment: Shipment, maxClearanceMinutes: number) {
+function shipmentScheduleFit(
+  shipment: Shipment,
+  maxClearanceMinutes: number,
+  effectiveClearanceMinutes = clearanceMinutes(shipment),
+) {
   if (shipment.mode !== "air" && shipment.compatibility !== "regulated") {
     return 1;
   }
 
-  const clearance = clearanceMinutes(shipment);
+  const clearance = effectiveClearanceMinutes;
   const softTarget = maxClearanceMinutes * 0.5;
   const overage = Math.max(0, clearance - softTarget);
   return clampPercent(1 - overage / Math.max(maxClearanceMinutes, 1));
@@ -241,6 +365,7 @@ function riskFlagsFor(
   minDriverScore: number,
   maxClearanceMinutes: number,
   preferContracted: boolean,
+  carrierCandidate?: AirCarrierCandidate,
 ) {
   const flags: string[] = [];
   const driverScore = shipment.driverScore ?? 78;
@@ -256,8 +381,15 @@ function riskFlagsFor(
   if (familyFit < 0.68) {
     flags.push("Strict cargo segregation needed");
   }
-  if (shipment.mode === "air" && clearanceMinutes(shipment) > maxClearanceMinutes) {
+  const effectiveClearance = carrierCandidate?.totalClearanceMinutes ?? clearanceMinutes(shipment);
+  if (shipment.mode === "air" && effectiveClearance > maxClearanceMinutes) {
     flags.push("Airport clearance exceeds scenario cap");
+  }
+  if (shipment.mode === "air" && !carrierCandidate) {
+    flags.push("No compatible air carrier");
+  }
+  if (carrierCandidate && carrierCandidate.carrier.distanceFromCommonAreaKm >= 15) {
+    flags.push("Remote carrier terminal adds transfer time");
   }
   if (preferContracted && shipment.contractType === "spot market") {
     flags.push("Spot-market capacity");
@@ -330,11 +462,10 @@ function routeNodesFor(corridor: Corridor, shipment: ScoredShipment) {
 function instructionFor(corridor: Corridor, shipment: ScoredShipment, maxDetour: number) {
   const cargo = shipment.cargo.toLowerCase();
   const vehicle = shipment.vehicleProfile?.toLowerCase() ?? "compatible vehicle";
-  const driverScore = shipment.driverScore ?? 78;
   const routeTrips = shipment.routeFamiliarityTrips ?? 0;
 
   if (shipment.mode === "air") {
-    return `Book ${shipment.matchedTonnes} t of ${cargo} into ${vehicle} with a ${driverScore} driver score and keep road movement limited to first and last mile transfers.`;
+    return `Book ${shipment.matchedTonnes} t of ${cargo} with ${shipment.assignedCarrier ?? "the selected carrier"} through ${shipment.carrierFacility ?? "the cargo terminal"}; allow ${shipment.carrierTransferMinutes ?? 0} minutes for terminal transfer and keep road movement limited to first and last mile transfers.`;
   }
 
   if (shipment.mode === "sea") {
@@ -349,11 +480,11 @@ function instructionFor(corridor: Corridor, shipment: ScoredShipment, maxDetour:
 }
 
 function schedulePlanFor(shipment: ScoredShipment, maxClearanceMinutes: number) {
-  const clearance = clearanceMinutes(shipment);
+  const clearance = shipment.carrierTotalClearanceMinutes ?? clearanceMinutes(shipment);
   const peakWindow = shipment.peakWindow ?? "next dispatch wave";
 
   if (shipment.mode === "air") {
-    return `${shipment.airportPair ?? "nearest cargo gateway"}; peak window ${peakWindow}; ${clearance} min handling/security/customs against ${maxClearanceMinutes} min cap.`;
+    return `${shipment.airportPair ?? "nearest cargo gateway"}; ${shipment.assignedCarrier ?? "eligible carrier"} via ${shipment.carrierFacility ?? "cargo terminal"}; peak window ${peakWindow}; ${clearance} min shipment and terminal clearance against ${maxClearanceMinutes} min cap.`;
   }
 
   return `Dispatch in ${peakWindow}; historical transit ${shipment.avgTransitHours ?? 0} h; ${clearance} min handling buffer.`;
@@ -367,7 +498,19 @@ function buildRecommendedActions(
   guardrail: number,
   maxClearanceMinutes: number,
 ): RecommendedAction[] {
-  return accepted.slice(0, 6).map((shipment, index) => {
+  const leading = accepted.slice(0, 3);
+  const firstAir = accepted.find((shipment) => shipment.mode === "air");
+  const actionCandidates = [
+    ...leading,
+    ...(firstAir && !leading.some((shipment) => shipment.id === firstAir.id) ? [firstAir] : []),
+    ...accepted.filter(
+      (shipment) =>
+        !leading.some((leadingShipment) => leadingShipment.id === shipment.id) &&
+        shipment.id !== firstAir?.id,
+    ),
+  ].slice(0, 6);
+
+  return actionCandidates.map((shipment, index) => {
     const route = routeNodesFor(corridor, shipment);
     const revenue = shipment.matchedTonnes * shipment.revenuePerTon;
     const emptyKmAvoided = Math.round(
@@ -388,7 +531,13 @@ function buildRecommendedActions(
       routeText: route.join(" -> "),
       operatingInstruction: instructionFor(corridor, shipment, maxDetour),
       why: [
-        `Score ${shipment.score} from route fit, reliability, revenue, cargo fit, operating quality and K-means cluster fit`,
+        `Score ${shipment.score} from route fit, reliability, revenue, cargo fit, operating quality, carrier trade-off and K-means cluster fit`,
+        ...(shipment.mode === "air" && shipment.assignedCarrier
+          ? [
+              `${shipment.assignedCarrier} scores ${Math.round((shipment.carrierFit ?? 0) * 100)}% for the selected cost-versus-access preference`,
+              shipment.carrierTradeoff ?? "Carrier price and terminal access are balanced in the score",
+            ]
+          : []),
         `K-means group: ${shipment.clusterLabel ?? "standard shipment cluster"} with ${Math.round(
           (shipment.clusterFit ?? 0) * 100,
         )}% cluster fit`,
@@ -416,6 +565,17 @@ function buildRecommendedActions(
       clusterFit: shipment.clusterFit,
       clusterAdjustment: shipment.clusterAdjustment,
       clusterInsight: shipment.clusterInsight,
+      assignedCarrier: shipment.assignedCarrier,
+      carrierFacility: shipment.carrierFacility,
+      carrierRatePerKg: shipment.carrierRatePerKg,
+      carrierDistanceKm: shipment.carrierDistanceKm,
+      carrierTransferMinutes: shipment.carrierTransferMinutes,
+      carrierCutoffBufferMinutes: shipment.carrierCutoffBufferMinutes,
+      carrierTotalClearanceMinutes: shipment.carrierTotalClearanceMinutes,
+      estimatedCarrierCost: shipment.estimatedCarrierCost,
+      carrierFit: shipment.carrierFit,
+      carrierAdjustment: shipment.carrierAdjustment,
+      carrierTradeoff: shipment.carrierTradeoff,
     };
   });
 }
@@ -428,6 +588,7 @@ function scoreShipment(
   maxClearanceMinutes: number,
   preferContracted: boolean,
   clusterProfile?: ShipmentClusterProfile,
+  carrierCandidate?: AirCarrierCandidate,
 ) {
   const routeFit = Math.max(0, 1 - shipment.detourKm / Math.max(maxDetour, 1));
   const reliabilityFit = shipment.reliability / 100;
@@ -445,13 +606,15 @@ function scoreShipment(
   const driverFit = (shipment.driverScore ?? 78) / 100;
   const routeFamiliarityFit = Math.min((shipment.routeFamiliarityTrips ?? 0) / 50, 1);
   const contractStrength = shipmentContractFit(shipment);
-  const timingFit = shipmentScheduleFit(shipment, maxClearanceMinutes);
+  const effectiveClearance = carrierCandidate?.totalClearanceMinutes ?? clearanceMinutes(shipment);
+  const timingFit = shipmentScheduleFit(shipment, maxClearanceMinutes, effectiveClearance);
   const clusterFit = clusterProfile?.fit ?? 0.72;
   const clusterAdjustment = clusterProfile?.adjustment ?? 0;
+  const carrierAdjustment = shipment.mode === "air" ? carrierCandidate?.adjustment ?? -8 : 0;
   const guardrailPenalty = ((guardrail - 50) / 50) * (1 - compatibilityFit) * 22;
   const driverPenalty = Math.max(0, minDriverScore - (shipment.driverScore ?? 78)) * 0.35;
   const contractPenalty = preferContracted && shipment.contractType === "spot market" ? 5 : 0;
-  const clearancePenalty = (Math.max(0, clearanceMinutes(shipment) - maxClearanceMinutes) / 60) * 4;
+  const clearancePenalty = (Math.max(0, effectiveClearance - maxClearanceMinutes) / 60) * 4;
 
   const score = Math.round(
     routeFit * 22 +
@@ -465,7 +628,8 @@ function scoreShipment(
       contractStrength * 4 +
       timingFit * 2 -
       guardrailPenalty +
-      clusterAdjustment -
+      clusterAdjustment +
+      carrierAdjustment -
       driverPenalty -
       contractPenalty -
       clearancePenalty,
@@ -484,12 +648,20 @@ function scoreShipment(
       scheduleFit: Number(timingFit.toFixed(2)),
       clusterFit,
       clusterAdjustment,
+      carrierFit: carrierCandidate?.fit,
+      carrierAdjustment,
     },
     clusterLabel: clusterProfile?.label ?? "Scenario baseline cluster",
     clusterFit,
     clusterAdjustment,
     clusterInsight: clusterProfile?.insight ?? "No K-means segment was available for this shipment.",
-    riskFlags: riskFlagsFor(shipment, minDriverScore, maxClearanceMinutes, preferContracted),
+    riskFlags: riskFlagsFor(
+      shipment,
+      minDriverScore,
+      maxClearanceMinutes,
+      preferContracted,
+      carrierCandidate,
+    ),
   };
 }
 
@@ -503,6 +675,8 @@ function buildOperationalSummary(
   const compatibilityCleared = accepted.filter(
     (item) => !(item.riskFlags ?? []).includes("Strict cargo segregation needed"),
   );
+  const acceptedAir = accepted.filter((item) => item.mode === "air" && item.assignedCarrier);
+  const acceptedAirCount = Math.max(acceptedAir.length, 1);
 
   return {
     avgDriverScore: Math.round(
@@ -514,7 +688,9 @@ function buildOperationalSummary(
     contractedShare: Math.round((contracted.length / acceptedCount) * 100),
     compatibilityCleared: Math.round((compatibilityCleared.length / acceptedCount) * 100),
     airClearanceBreaches: declined.filter(
-      (item) => item.mode === "air" && clearanceMinutes(item) > maxClearanceMinutes,
+      (item) =>
+        item.mode === "air" &&
+        (item.carrierTotalClearanceMinutes ?? clearanceMinutes(item)) > maxClearanceMinutes,
     ).length,
     strictCompatibilityRejected: declined.filter((item) =>
       ["Cargo segregation risk too high", "Guardrail confidence too low"].includes(item.reason),
@@ -526,6 +702,13 @@ function buildOperationalSummary(
       (accepted.reduce((sum, item) => sum + (item.clusterFit ?? 0.72), 0) / acceptedCount) * 100,
     ),
     clusterBoostedMatches: accepted.filter((item) => (item.clusterAdjustment ?? 0) > 0).length,
+    avgAirCarrierCost: Math.round(
+      acceptedAir.reduce((sum, item) => sum + (item.estimatedCarrierCost ?? 0), 0) / acceptedAirCount,
+    ),
+    avgCarrierTransferMinutes: Math.round(
+      acceptedAir.reduce((sum, item) => sum + (item.carrierTransferMinutes ?? 0), 0) / acceptedAirCount,
+    ),
+    remoteCarrierAssignments: acceptedAir.filter((item) => (item.carrierDistanceKm ?? 0) >= 15).length,
   };
 }
 
@@ -536,8 +719,10 @@ export function optimizeCorridor(
   maxDetour: number,
   guardrail: number,
   minDriverScore = 72,
-  maxClearanceMinutes = 360,
+  maxClearanceMinutes = 480,
   preferContracted = true,
+  airCarriers: AirCarrier[] = [],
+  airPricePriority = 60,
 ): OptimizationResult {
   const anchorFactor = anchorEnabled ? anchorMultiplier : 0.54;
   const availableByMode = new Map<Mode, number>();
@@ -552,9 +737,21 @@ export function optimizeCorridor(
   });
 
   const clusterLookup = buildShipmentClusterLookup(corridor.shipments);
+  const carrierOptionsByShipment = new Map<string, AirCarrierCandidate[]>();
+  const remainingCarrierCapacity = new Map(
+    airCarriers.map((carrier) => [carrier.id, carrier.availableCapacityTonnes]),
+  );
 
   const scored = corridor.shipments
     .map((shipment) => {
+      const carrierOptions =
+        shipment.mode === "air"
+          ? rankAirCarriers(corridor.id, shipment, airCarriers, airPricePriority)
+          : [];
+      carrierOptionsByShipment.set(shipment.id, carrierOptions);
+      const initialCarrier =
+        carrierOptions.find((candidate) => candidate.totalClearanceMinutes <= maxClearanceMinutes) ??
+        carrierOptions[0];
       const scoring = scoreShipment(
         shipment,
         maxDetour,
@@ -563,6 +760,7 @@ export function optimizeCorridor(
         maxClearanceMinutes,
         preferContracted,
         clusterLookup.get(shipment.id),
+        initialCarrier,
       );
 
       return {
@@ -574,6 +772,7 @@ export function optimizeCorridor(
         clusterFit: scoring.clusterFit,
         clusterAdjustment: scoring.clusterAdjustment,
         clusterInsight: scoring.clusterInsight,
+        ...carrierFields(initialCarrier),
         matchedTonnes: 0,
         reason: "",
       };
@@ -592,7 +791,18 @@ export function optimizeCorridor(
     const cargoBlocked = guardrail >= 82 && shipmentCargoFit(shipment) < 0.68;
     const detourBlocked = shipment.mode !== "air" && shipment.detourKm > maxDetour;
     const driverBlocked = (shipment.driverScore ?? 78) < minDriverScore;
-    const clearanceBlocked = shipment.mode === "air" && clearanceMinutes(shipment) > maxClearanceMinutes;
+    const carrierOptions = carrierOptionsByShipment.get(shipment.id) ?? [];
+    const feasibleCarriers = carrierOptions.filter(
+      (candidate) => candidate.totalClearanceMinutes <= maxClearanceMinutes,
+    );
+    const selectedCarrier = feasibleCarriers.find(
+      (candidate) => (remainingCarrierCapacity.get(candidate.carrier.id) ?? 0) > 0,
+    );
+    const noCompatibleCarrier = shipment.mode === "air" && carrierOptions.length === 0;
+    const clearanceBlocked =
+      shipment.mode === "air" && carrierOptions.length > 0 && feasibleCarriers.length === 0;
+    const carrierCapacityBlocked =
+      shipment.mode === "air" && feasibleCarriers.length > 0 && !selectedCarrier;
 
     if (modeRemaining <= 0) {
       declined.push({ ...shipment, reason: "No capacity left in this mode" });
@@ -614,6 +824,16 @@ export function optimizeCorridor(
       return;
     }
 
+    if (noCompatibleCarrier) {
+      declined.push({ ...shipment, reason: "No compatible air carrier" });
+      return;
+    }
+
+    if (carrierCapacityBlocked) {
+      declined.push({ ...shipment, reason: "No carrier-specific air capacity left" });
+      return;
+    }
+
     if (cargoBlocked) {
       declined.push({ ...shipment, reason: "Cargo segregation risk too high" });
       return;
@@ -624,10 +844,17 @@ export function optimizeCorridor(
       return;
     }
 
-    const matchedTonnes = Math.min(shipment.tonnes, modeRemaining);
+    const carrierRemaining = selectedCarrier
+      ? remainingCarrierCapacity.get(selectedCarrier.carrier.id) ?? 0
+      : shipment.tonnes;
+    const matchedTonnes = Math.min(shipment.tonnes, modeRemaining, carrierRemaining);
     remainingBookable.set(shipment.mode, modeRemaining - matchedTonnes);
+    if (selectedCarrier) {
+      remainingCarrierCapacity.set(selectedCarrier.carrier.id, carrierRemaining - matchedTonnes);
+    }
     accepted.push({
       ...shipment,
+      ...carrierFields(selectedCarrier),
       matchedTonnes,
       reason: matchedTonnes === shipment.tonnes ? "Full match" : `${matchedTonnes} t partial match`,
     });

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 import { Metric } from "./components/Metric";
-import { corridors, retailProfiles } from "./data/fallback-data";
+import { airCarriers, corridors, retailProfiles } from "./data/fallback-data";
 import { fetchBackendOptimization, fetchInitialDashboardData } from "./lib/api";
 import { initialNetworkInputs, sameNetworkInputs } from "./lib/config";
 import { formatCurrency, formatShortCurrency } from "./lib/formatters";
@@ -41,6 +41,74 @@ import type {
   RetailProfile,
 } from "./lib/types";
 
+const retailClearanceDefaults: Record<
+  string,
+  {
+    routeType: "domestic" | "international";
+    securityMinutes: number;
+    immigrationMinutes: number;
+    recommendedArrivalMinutes: number;
+    boardingBufferMinutes: number;
+  }
+> = {
+  africa: {
+    routeType: "international",
+    securityMinutes: 62,
+    immigrationMinutes: 38,
+    recommendedArrivalMinutes: 190,
+    boardingBufferMinutes: 40,
+  },
+  uk: {
+    routeType: "international",
+    securityMinutes: 58,
+    immigrationMinutes: 34,
+    recommendedArrivalMinutes: 185,
+    boardingBufferMinutes: 40,
+  },
+  saudi: {
+    routeType: "international",
+    securityMinutes: 66,
+    immigrationMinutes: 42,
+    recommendedArrivalMinutes: 200,
+    boardingBufferMinutes: 45,
+  },
+  "south-east-asia": {
+    routeType: "international",
+    securityMinutes: 52,
+    immigrationMinutes: 28,
+    recommendedArrivalMinutes: 170,
+    boardingBufferMinutes: 35,
+  },
+  "middle-east": {
+    routeType: "international",
+    securityMinutes: 60,
+    immigrationMinutes: 36,
+    recommendedArrivalMinutes: 185,
+    boardingBufferMinutes: 40,
+  },
+  "domestic-metro": {
+    routeType: "domestic",
+    securityMinutes: 24,
+    immigrationMinutes: 0,
+    recommendedArrivalMinutes: 95,
+    boardingBufferMinutes: 25,
+  },
+  europe: {
+    routeType: "international",
+    securityMinutes: 64,
+    immigrationMinutes: 40,
+    recommendedArrivalMinutes: 195,
+    boardingBufferMinutes: 45,
+  },
+  "north-america": {
+    routeType: "international",
+    securityMinutes: 70,
+    immigrationMinutes: 45,
+    recommendedArrivalMinutes: 210,
+    boardingBufferMinutes: 45,
+  },
+};
+
 export default function Home() {
   const [view, setView] = useState<"network" | "retail">("network");
   const [selectedCorridorId, setSelectedCorridorId] = useState<CorridorId>(
@@ -55,6 +123,7 @@ export default function Home() {
     initialNetworkInputs.maxClearanceMinutes,
   );
   const [preferContracted, setPreferContracted] = useState(initialNetworkInputs.preferContracted);
+  const [airPricePriority, setAirPricePriority] = useState(initialNetworkInputs.airPricePriority);
   const [appliedNetworkInputs, setAppliedNetworkInputs] =
     useState<NetworkInputs>(initialNetworkInputs);
   const [selectedRetailId, setSelectedRetailId] = useState<RetailId>("africa");
@@ -132,6 +201,7 @@ export default function Home() {
       minDriverScore,
       maxClearanceMinutes,
       preferContracted,
+      airPricePriority,
     }),
     [
       selectedCorridorId,
@@ -142,6 +212,7 @@ export default function Home() {
       minDriverScore,
       maxClearanceMinutes,
       preferContracted,
+      airPricePriority,
     ],
   );
   const hasPendingNetworkInputs = !sameNetworkInputs(draftNetworkInputs, appliedNetworkInputs);
@@ -158,6 +229,8 @@ export default function Home() {
         appliedNetworkInputs.minDriverScore,
         appliedNetworkInputs.maxClearanceMinutes,
         appliedNetworkInputs.preferContracted,
+        airCarriers,
+        appliedNetworkInputs.airPricePriority,
       ),
     [corridor, appliedNetworkInputs],
   );
@@ -208,11 +281,42 @@ export default function Home() {
   ]);
 
   const retail = retailData.find((item) => item.id === selectedRetailId) ?? retailData[0];
-  const retailUplift = Math.round(
-    retail.assortments.reduce((sum, item) => sum + item.uplift * (item.share / 100), 0) +
-      passengerWave / 10,
+  // Supports the currently running pre-change backend until it is restarted.
+  const clearanceDefaults = retailClearanceDefaults[retail.id] ?? {
+    routeType: "international" as const,
+    securityMinutes: 55,
+    immigrationMinutes: 30,
+    recommendedArrivalMinutes: 180,
+    boardingBufferMinutes: 35,
+  };
+  const retailRouteType = retail.routeType ?? clearanceDefaults.routeType;
+  const retailSecurityMinutes = retail.securityMinutes ?? clearanceDefaults.securityMinutes;
+  const retailImmigrationMinutes = retail.immigrationMinutes ?? clearanceDefaults.immigrationMinutes;
+  const retailRecommendedArrivalMinutes =
+    retail.recommendedArrivalMinutes ?? clearanceDefaults.recommendedArrivalMinutes;
+  const retailBoardingBufferMinutes =
+    retail.boardingBufferMinutes ?? clearanceDefaults.boardingBufferMinutes;
+  const retailClearanceMinutes = retailSecurityMinutes + retailImmigrationMinutes;
+  const retailShoppingWindow = Math.max(
+    12,
+    retailRecommendedArrivalMinutes - retailClearanceMinutes - retailBoardingBufferMinutes,
   );
+  const retailDwellTarget = retailRouteType === "international" ? 70 : 45;
+  const retailDwellFactor = Math.min(1.12, Math.max(0.72, retailShoppingWindow / retailDwellTarget));
+  const retailAssortmentUplift = retail.assortments.reduce(
+    (sum, item) => sum + item.uplift * (item.share / 100),
+    0,
+  );
+  const retailUplift = Math.round((retailAssortmentUplift + passengerWave / 10) * retailDwellFactor);
   const retailRevenue = Math.round(retail.baseRevenue * (1 + retailUplift / 100));
+  const retailClearancePressure = Math.round(
+    (retailClearanceMinutes / Math.max(retailRecommendedArrivalMinutes, 1)) * 100,
+  );
+  const retailRouteTypeLabel = retailRouteType === "international" ? "International" : "Domestic";
+  const retailClearanceAdvice =
+    retailRouteType === "international"
+      ? "International passengers spend longer in security and immigration, so the optimiser prioritises clear post-security zones, faster checkout, and high-intent products."
+      : "Domestic passengers clear faster, so the optimiser can lean into impulse products and quick replenishment near frequent-gate flows.";
   const totalCapacity = corridor.modes.reduce((sum, item) => sum + item.capacity, 0);
   const modeUtilization = corridor.modes.map((item) => {
     const backendMode = optimization.modeUtilisation?.find((mode) => mode.mode === item.mode);
@@ -419,6 +523,22 @@ export default function Home() {
               />
             </div>
 
+            <div className="slider-group">
+              <label htmlFor="air-price-priority">
+                Air price priority
+                <span>{airPricePriority}%</span>
+              </label>
+              <input
+                id="air-price-priority"
+                type="range"
+                min="0"
+                max="100"
+                value={airPricePriority}
+                onChange={(event) => setAirPricePriority(Number(event.target.value))}
+              />
+              <small className="control-hint">0 favours fast terminal access; 100 favours lower carrier cost.</small>
+            </div>
+
             <label className="toggle-row">
               <span>
                 <strong>Prefer contracted capacity</strong>
@@ -594,10 +714,31 @@ export default function Home() {
                           <strong>{action.clusterFit ? `${Math.round(action.clusterFit * 100)}%` : "n/a"}</strong>
                           cluster fit
                         </span>
+                        {action.mode === "air" && action.assignedCarrier ? (
+                          <>
+                            <span>
+                              <strong>{action.assignedCarrier}</strong>
+                              selected carrier
+                            </span>
+                            <span>
+                              <strong>{action.carrierDistanceKm} km / {action.carrierTransferMinutes} min</strong>
+                              terminal access
+                            </span>
+                            <span>
+                              <strong>₹{action.carrierRatePerKg}/kg</strong>
+                              carrier rate
+                            </span>
+                            <span>
+                              <strong>{formatShortCurrency(action.estimatedCarrierCost ?? 0)}</strong>
+                              estimated carrier cost
+                            </span>
+                          </>
+                        ) : null}
                       </div>
 
                       <p className="action-note">{action.compatibilityNote}</p>
                       <p className="action-note">{action.schedulePlan}</p>
+                      {action.carrierTradeoff ? <p className="action-note">{action.carrierTradeoff}</p> : null}
                       {action.clusterLabel ? (
                         <p className="action-note">
                           K-means group: {action.clusterLabel}
@@ -642,6 +783,11 @@ export default function Home() {
                           {match.vehicleProfile ?? "Compatible vehicle"} · {match.contractType ?? "spot market"}
                         </small>
                         <small>{match.clusterLabel ?? "K-means baseline cluster"}</small>
+                        {match.mode === "air" && match.assignedCarrier ? (
+                          <small>
+                            {match.assignedCarrier} · {match.carrierDistanceKm} km terminal access · ₹{match.carrierRatePerKg}/kg
+                          </small>
+                        ) : null}
                       </div>
                       <div className="match-score">
                         <strong>{match.score}</strong>
@@ -737,6 +883,18 @@ export default function Home() {
                   <dt>Cluster boosted</dt>
                   <dd>{operationalSummary.clusterBoostedMatches ?? 0}</dd>
                 </div>
+                <div>
+                  <dt>Avg air carrier cost</dt>
+                  <dd>{formatShortCurrency(operationalSummary.avgAirCarrierCost ?? 0)}</dd>
+                </div>
+                <div>
+                  <dt>Avg terminal transfer</dt>
+                  <dd>{operationalSummary.avgCarrierTransferMinutes ?? 0} min</dd>
+                </div>
+                <div>
+                  <dt>Remote carrier choices</dt>
+                  <dd>{operationalSummary.remoteCarrierAssignments ?? 0}</dd>
+                </div>
               </dl>
             </section>
 
@@ -825,6 +983,14 @@ export default function Home() {
               <ShieldCheck size={18} />
               <span>{retail.compliance}</span>
             </div>
+
+            <div className="retail-note clearance-note">
+              <Clock3 size={18} />
+              <span>
+                {retailRouteTypeLabel} route: {retailClearanceMinutes} min clearance before passengers reach the
+                retail window.
+              </span>
+            </div>
           </aside>
 
           <section className="panel retail-board">
@@ -837,6 +1003,34 @@ export default function Home() {
               <div className="retail-score">
                 <strong>{retailUplift}%</strong>
                 <span>sales uplift</span>
+              </div>
+            </div>
+
+            <div className="clearance-band" aria-label={`${retail.name} security clearance assumptions`}>
+              <div className="clearance-copy">
+                <div className="section-title">
+                  <ShieldCheck size={18} />
+                  <h2>Security Clearance Impact</h2>
+                </div>
+                <p>{retailClearanceAdvice}</p>
+              </div>
+              <div className="clearance-metrics">
+                <span>
+                  <strong>{retailSecurityMinutes} min</strong>
+                  security
+                </span>
+                <span>
+                  <strong>{retailImmigrationMinutes} min</strong>
+                  immigration
+                </span>
+                <span>
+                  <strong>{retailShoppingWindow} min</strong>
+                  shopping window
+                </span>
+                <span>
+                  <strong>{retailClearancePressure}%</strong>
+                  arrival buffer used
+                </span>
               </div>
             </div>
 
@@ -874,6 +1068,18 @@ export default function Home() {
               label="Weekly flights"
               value={retail.weeklyFlights.toString()}
               delta={retail.passengerMix}
+            />
+            <Metric
+              icon={ShieldCheck}
+              label="Security clearance"
+              value={`${retailClearanceMinutes} min`}
+              delta={`${retailRouteTypeLabel}: ${retailSecurityMinutes} min security + ${retailImmigrationMinutes} min immigration`}
+            />
+            <Metric
+              icon={Clock3}
+              label="Post-clearance window"
+              value={`${retailShoppingWindow} min`}
+              delta={`${retailRecommendedArrivalMinutes} min arrival buffer less clearance and boarding`}
             />
             <Metric
               icon={ShoppingBag}

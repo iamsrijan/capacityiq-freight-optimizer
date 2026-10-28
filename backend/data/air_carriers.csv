@@ -1,0 +1,6 @@
+id,name,facility,distance_from_common_area_km,transfer_minutes,cutoff_buffer_minutes,rate_per_kg,handling_fee,security_fee_per_kg,on_time_percent,cancellation_rate_percent,available_capacity_tonnes,supports_regulated,supports_cold_chain,corridor_ids
+indigo-cargo,IndiGo Cargo,Remote airline cargo facility,19,72,90,46,8500,1.8,88,3.1,140,true,false,*
+air-india-cargo,Air India Cargo,Integrated common cargo terminal,7,38,75,60,12000,2.4,91,2.2,110,true,true,*
+spicexpress,SpiceXpress,Secondary express cargo terminal,12,51,80,51,9800,2.0,85,4.1,95,true,false,*
+blue-dart-aviation,Blue Dart Aviation,Dedicated express cargo terminal,4,28,55,78,15000,3.0,96,1.2,70,true,true,*
+akasa-air-cargo,Akasa Air Cargo,Passenger terminal cargo annex,9,42,70,49,9000,1.9,89,2.4,85,false,false,*

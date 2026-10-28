@@ -15,7 +15,7 @@ The application has two visible workspaces.
 | Workspace | Purpose | Main Output |
 | --- | --- | --- |
 | Freight Optimisation | Match cargo demand with unused road, air, sea, and staging capacity | Empty kilometres avoided, matched cargo, unlocked revenue, load factor, recommended actions, and guardrail queue |
-| Airport Retail Optimisation | Match product mix with passenger route demand | Product allocation, sales uplift, optimised revenue, and store productivity message |
+| Airport Retail Optimisation | Match product mix with passenger route demand | Product allocation, security-clearance impact, sales uplift, optimised revenue, and store productivity message |
 
 K-means clustering is not shown as a separate tab anymore. It is now used inside the freight optimiser calculation itself. The optimiser groups similar shipments, calculates a cluster-fit signal, and uses that signal while scoring and ranking loads.
 
@@ -28,7 +28,7 @@ K-means clustering is not shown as a separate tab anymore. It is now used inside
 | Marker | Area | What It Does |
 | --- | --- | --- |
 | 1 | Workspace tabs | Switch between Freight and Airport retail views |
-| 2 | Network inputs | Choose corridor, anchor demand, detour policy, driver quality, clearance cap, and guardrail strictness |
+| 2 | Network inputs | Choose corridor, anchor demand, detour policy, driver quality, clearance cap, air price priority, and guardrail strictness |
 | 3 | Key result cards | Show empty kilometres avoided, matched cargo, revenue, and unit cost impact |
 | 4 | Live corridor map | Show the selected corridor and multimodal movement pattern |
 | 5 | Capacity and economics rail | Show mode utilisation, operating intelligence, savings, capacity, and review queue |
@@ -53,7 +53,7 @@ K-means clustering is not shown as a separate tab anymore. It is now used inside
 | 2 | Passenger signal slider | Models stronger or weaker passenger demand |
 | 3 | Product allocation board | Shows how store space should be assigned |
 | 4 | Sales uplift | Shows expected uplift from better assortment matching |
-| 5 | Retail metrics | Shows flights, revenue, and asset productivity |
+| 5 | Retail metrics | Shows flights, international/domestic clearance time, shopping window, revenue, and asset productivity |
 
 ## Detailed Walkthrough
 
@@ -70,6 +70,7 @@ Use the Freight tab to simulate how the marketplace fills unused freight capacit
 | Compatibility guardrail | Strictness for cargo fit and risk | Higher values reject risky cargo such as chilled/regulated loads more aggressively |
 | Driver score floor | Minimum acceptable driver/handler quality | Low-score operators are sent to the Guardrail Queue |
 | Air clearance cap | Maximum handling + security + customs + layover window | Air shipments breaching the cap are rejected |
+| Air price priority | Cost-versus-terminal-access preference from 0 to 100 | Higher values favour cheaper carriers; lower values favour nearer, faster cargo terminals |
 | Prefer contracted capacity | Whether spot-market loads are penalised | Contracted or SLA capacity scores higher than spot capacity |
 
 After changing inputs, select **Run optimiser**. The app sends the applied scenario to `/api/optimise`. The KPI cards update with empty kilometres avoided, matched tonnes, revenue unlocked, and unit cost reduction.
@@ -95,7 +96,16 @@ Use the Airport retail tab to show that the same optimisation idea applies outsi
 
 Select a passenger route profile such as Africa, UK, Saudi, Domestic Metro, or North America. Then adjust Passenger signal to simulate stronger or weaker passenger demand.
 
-The layout board changes the recommended product-space mix. The revenue card shows how better route-aware merchandising can increase revenue from the same airport shops without adding major CAPEX.
+The layout board changes the recommended product-space mix. The retail workspace also shows security-clearance time, immigration time, and the post-clearance shopping window. International flights use longer security and immigration assumptions than domestic flights, so the app makes the operational trade-off visible: passengers may have strong demand, but less usable shopping time after clearance. The revenue card uses this shopping-window signal when calculating uplift.
+
+Example:
+
+```text
+International route
+  -> longer security + immigration clearance
+  -> smaller post-clearance shopping window
+  -> more focus on high-intent categories, faster checkout, and clear post-security placement
+```
 
 ## New Features Added After The Last Presentation
 
@@ -109,7 +119,9 @@ These are the important upgrades added after your last presentation feedback.
 | Cluster boosted count | Operational Intelligence shows how many accepted matches received a positive cluster adjustment | This proves clustering is being used in the actual calculation |
 | Driver score floor | Freight inputs now include minimum driver/operator quality | Risky capacity can be filtered before accepting cargo |
 | Air clearance cap | Air cargo is checked against handling, security, customs, and layover time | Airport cargo is treated differently from road cargo |
+| Carrier location and price trade-off | Air loads compare carrier rate, fees, terminal distance, transfer/cut-off time, reliability, cancellation risk, capability, and remaining carrier capacity | A cheaper remote carrier can win for flexible cargo while a nearer premium carrier can win for urgent cargo |
 | Contracted capacity preference | Spot-market loads can be penalised when contracted capacity is preferred | The app can reflect SLA and reliability preferences |
+| International security clearance | Airport retail profiles now include route type, security minutes, immigration minutes, arrival buffer, and boarding buffer | International flights visibly take longer to clear, reducing the shopping window and changing retail uplift |
 | Realistic operating reserve | Capacity bars use bookable capacity plus reserve capacity | Capacity no longer unrealistically shows 100% simply because demand exists |
 | Larger CSV-backed backend data | The backend works from thousands of shipment rows and partner/hub tables | The demo feels closer to a pilot dataset than a static mockup |
 | Better action recommendations | Recommendations now include cargo, route, mode, vehicle, timing, driver, contract, and cluster reason | The app tells operators what to do, not only what the KPI is |
@@ -245,7 +257,8 @@ The backend uses dummy CSV data in `backend/data`. The dataset is intentionally 
 | `shipments.csv` | 2,400 | Candidate cargo loads to match into available capacity |
 | `hubs.csv` | 42 | Staging hubs, docks, cold capacity, and reliability |
 | `partners.csv` | 144 | Transporters, air cargo partners, warehouses, and 3PLs |
-| `retail_profiles.csv` | 8 | Airport passenger route profiles and revenue assumptions |
+| `air_carriers.csv` | 5 | Demonstration carrier rates, cargo-terminal distance, transfer/cut-off time, reliability, cargo capability, and carrier capacity |
+| `retail_profiles.csv` | 8 | Airport passenger route profiles, revenue assumptions, route type, security time, immigration time, arrival buffer, and boarding buffer |
 | `retail_assortments.csv` | 40 | Product allocation and uplift assumptions by passenger route profile |
 
 Regenerate the dataset:
@@ -283,6 +296,7 @@ curl http://127.0.0.1:8000/api/health
 | `GET` | `/api/retail-profiles` | Airport retail route profiles and assortment rules |
 | `GET` | `/api/hubs?limit=50` | Hub table rows |
 | `GET` | `/api/partners?limit=50` | Partner table rows |
+| `GET` | `/api/air-carriers` | Air-carrier price, location, timing, reliability, capability, and capacity assumptions |
 | `POST` | `/api/optimise` | Run the backend freight optimiser |
 | `POST` | `/api/optimize` | Same as `/api/optimise` for US spelling |
 
@@ -298,7 +312,8 @@ curl -X POST http://127.0.0.1:8000/api/optimise \
     "maxDetour": 120,
     "guardrail": 74,
     "minDriverScore": 72,
-    "maxClearanceMinutes": 360,
+    "maxClearanceMinutes": 480,
+    "airPricePriority": 60,
     "preferContracted": true
   }'
 ```
@@ -325,6 +340,34 @@ curl -X POST http://127.0.0.1:8000/api/optimise \
 | `loadFactor` | Return capacity load factor |
 | `unitCostDrop` | Estimated freight unit cost reduction |
 | `anchorTonnes` | Anchor demand volume used in the optimiser run |
+
+## Airport Retail Clearance Formula
+
+Airport retail uses the same principle as freight: optimise the output of existing assets. The important constraint is not vehicle capacity, but passenger time after security.
+
+Each route profile contains:
+
+| Field | Meaning |
+| --- | --- |
+| `routeType` | `international` or `domestic` |
+| `securityMinutes` | Average security-screening time before passengers reach retail |
+| `immigrationMinutes` | Average immigration/passport-control time; domestic routes use `0` |
+| `recommendedArrivalMinutes` | Typical arrival buffer before departure |
+| `boardingBufferMinutes` | Time held back for boarding and gate movement |
+
+The app calculates:
+
+| Output | Formula |
+| --- | --- |
+| `clearanceMinutes` | `securityMinutes + immigrationMinutes` |
+| `shoppingWindow` | `max(12, recommendedArrivalMinutes - clearanceMinutes - boardingBufferMinutes)` |
+| `dwellTarget` | `70` minutes for international routes, `45` minutes for domestic routes |
+| `dwellFactor` | `min(1.12, max(0.72, shoppingWindow / dwellTarget))` |
+| `assortmentUplift` | Weighted average of product-category uplift by space share |
+| `retailUplift` | `round((assortmentUplift + passengerSignal / 10) * dwellFactor)` |
+| `optimisedRevenue` | `baseRevenue * (1 + retailUplift / 100)` |
+
+This is why an international route can have a strong passenger profile but still show pressure on the retail result: more time is consumed before the passenger reaches the shopping zone.
 
 ## How The App Recommends Routes, Products, And Quantity
 
@@ -389,11 +432,28 @@ Each shipment receives a score before capacity is allocated.
 | `scheduleFit` | `1` for simple non-air moves; for air or regulated moves it reduces when handling + security + customs + layover exceeds the clearance cap |
 | `clusterFit` | Weighted score from the K-means shipment-cluster centroid |
 | `clusterAdjustment` | `round((clusterFit - 0.66) * 24)` |
+| `carrierCost` | `tonnes * 1000 * (ratePerKg + securityFeePerKg) + handlingFee` for air shipments |
+| `carrierClearance` | Shipment handling + security + customs + layover + carrier transfer + carrier cut-off buffer |
+| `carrierPriceFit` | `minimumEligibleCarrierCost / carrierCost` |
+| `carrierAccessFit` | Weighted fit from terminal distance and transfer plus cut-off time |
+| `carrierFit` | Price/access balance controlled by `airPricePriority`, plus reliability and cancellation performance |
+| `carrierAdjustment` | `round((carrierFit - 0.68) * 12)` for air shipments |
 | `guardrailPenalty` | `((guardrail - 50) / 50) * (1 - compatibilityFit) * 22` |
 | `driverPenalty` | `max(0, minDriverScore - driverScore) * 0.35` |
 | `contractPenalty` | `5` when contracted capacity is preferred and the shipment is spot-market, otherwise `0` |
-| `clearancePenalty` | `max(0, clearanceMinutes - maxClearanceMinutes) / 60 * 4` |
-| `score` | `round(routeFit * 22 + reliabilityFit * 17 + compatibilityFit * 13 + cargoFit * 12 + revenueFit * 10 + urgencyFit * 6 + driverFit * 8 + routeFamiliarityFit * 6 + contractFit * 4 + scheduleFit * 2 + clusterAdjustment - guardrailPenalty - driverPenalty - contractPenalty - clearancePenalty)` |
+| `clearancePenalty` | `max(0, carrierClearance - maxClearanceMinutes) / 60 * 4` for air; shipment clearance is used for other modes |
+| `score` | Base weighted score + `clusterAdjustment` + `carrierAdjustment` - guardrail, driver, contract, and clearance penalties |
+
+For air-carrier ranking, `airPricePriority` changes the weights while reliability and cancellation remain fixed:
+
+```text
+costWeight = 0.20 + (airPricePriority / 100) * 0.35
+accessWeight = 0.55 - (airPricePriority / 100) * 0.35
+carrierFit = priceFit * costWeight + accessFit * accessWeight
+           + reliabilityFit * 0.20 + cancellationFit * 0.05
+```
+
+The bundled carrier values, including the farther and cheaper IndiGo Cargo scenario, are synthetic demonstration assumptions rather than live quotations.
 
 Compatibility fit values:
 
@@ -440,7 +500,9 @@ Where:
 | Capacity check | Reject if no bookable capacity remains in the shipment mode |
 | Detour check | Reject non-air shipments when `detourKm > maxDetour` |
 | Driver check | Reject when `driverScore < minDriverScore` |
-| Air clearance check | Reject air shipments when `handlingMinutes + securityMinutes + customsMinutes + layoverMinutes > maxClearanceMinutes` |
+| Air clearance check | Reject air shipments when shipment clearance + selected carrier transfer + carrier cut-off buffer exceeds `maxClearanceMinutes` |
+| Carrier capability check | Reject when no carrier supports the cargo type or corridor |
+| Carrier capacity check | Reject when all feasible carriers have exhausted their individual capacity |
 | Cargo segregation check | Reject lower-fit cargo families when strict guardrails are active |
 | Score check | Reject when `score < threshold` |
 | Strict guardrail check | Reject `chilled` or `regulated` cargo when `guardrail >= 82` |
@@ -451,7 +513,7 @@ Accepted shipments are processed from highest score to lowest score. A shipment 
 
 | Output | Formula |
 | --- | --- |
-| `matchedTonnes` per shipment | `min(shipmentTonnes, remainingBookableCapacityForMode)` |
+| `matchedTonnes` per shipment | `min(shipmentTonnes, remainingBookableCapacityForMode, remainingCarrierCapacity)` for air; mode capacity only for other modes |
 | `adjustedCapacity` | `sum(availableCapacity across all modes)` |
 | `totalMatchedTonnes` | `sum(matchedTonnes for accepted shipments)` |
 | `revenue` | `sum(matchedTonnes * revenuePerTon)` |
@@ -484,6 +546,9 @@ Accepted shipments are processed from highest score to lowest score. A shipment 
 | `avgMonthlyCost` | Average historical monthly cost across accepted matches |
 | `avgClusterFit` | Average K-means cluster fit across accepted matches |
 | `clusterBoostedMatches` | Count of accepted matches where K-means added positive score points |
+| `avgAirCarrierCost` | Average estimated selected-carrier cost across accepted air matches |
+| `avgCarrierTransferMinutes` | Average terminal-transfer time across accepted air matches |
+| `remoteCarrierAssignments` | Accepted air matches using a carrier at least 15 km from the common cargo area |
 
 ## Frontend Data Flow
 
@@ -493,7 +558,7 @@ The frontend starts with embedded sample data so the app can still open if the b
 2. `/api/retail-profiles`
 3. `/api/health`
 
-After loading succeeds, the top status bar shows the CSV shipment count. Freight controls act as draft network inputs. When the user selects Run optimiser, the frontend posts the visible corridor, anchor, detour, guardrail, driver score floor, air clearance cap, and contracted-capacity preference to `/api/optimise`. The backend returns the displayed accepted matches, rejected queue, mode utilisation, revenue, empty kilometres avoided, cost saved, load factor, unit cost impact, operational intelligence summary, and action-level vehicle/driver/contract/schedule/K-means recommendations.
+After loading succeeds, the top status bar shows the CSV shipment count. Freight controls act as draft network inputs. When the user selects Run optimiser, the frontend posts the visible corridor, anchor, detour, guardrail, driver score floor, air clearance cap, air price priority, and contracted-capacity preference to `/api/optimise`. The backend returns the displayed accepted matches, rejected queue, mode utilisation, revenue, empty kilometres avoided, cost saved, load factor, unit cost impact, operational intelligence summary, and action-level vehicle/driver/contract/carrier/schedule/K-means recommendations.
 
 If backend loading or backend optimisation fails, the app displays fallback status text and continues to work with the smaller embedded browser-side optimiser. The browser fallback also runs a deterministic K-means pass over the fallback shipment data.
 
@@ -555,6 +620,7 @@ capacityiq-freight-optimizer/
 | `useEffect(loadBackendOptimization)` | `app/page.tsx` | `Home` | Calls `fetchBackendOptimization` for the applied freight inputs |
 | `fetchInitialDashboardData` | `app/lib/api.ts` | `Home` | Fetches corridors, retail profiles, and dataset health |
 | `fetchBackendOptimization` | `app/lib/api.ts` | `Home` | Posts the applied freight inputs to `/api/optimise` |
+| Retail clearance calculation | `app/page.tsx` | `Home` | Converts route type, security time, immigration time, arrival buffer, and boarding buffer into shopping-window impact and retail uplift |
 | `buildShipmentClusterLookup` | `app/lib/optimizer.ts` | `optimizeCorridor` | Browser fallback K-means pass over shipment candidates |
 | `scoreShipment` | `app/lib/optimizer.ts` | `optimizeCorridor` | Browser fallback scoring with route, revenue, cargo, contract, schedule, and cluster signals |
 | `optimizeCorridor` | `app/lib/optimizer.ts` | `Home` through `useMemo` | Browser fallback optimiser only, used if the backend is unavailable |
@@ -611,8 +677,8 @@ capacityiq-freight-optimizer/
 | Toggle Prefer contracted capacity | `setPreferContracted` | Penalises spot-market capacity when the optimiser scores loads |
 | Select Run optimiser | `setAppliedNetworkInputs` | Applies the visible draft inputs and requests backend optimisation |
 | Switch to Airport retail | `setView` | Shows the retail optimisation workspace |
-| Select a passenger route | `setSelectedRetailId` | Changes product allocation and passenger profile |
-| Move Passenger signal | `setPassengerWave` | Changes sales uplift and optimised revenue estimate |
+| Select a passenger route | `setSelectedRetailId` | Changes product allocation, passenger profile, domestic/international clearance assumptions, and post-clearance shopping window |
+| Move Passenger signal | `setPassengerWave` | Changes sales uplift and optimised revenue estimate after applying the shopping-window factor |
 
 ## Production Extension
 

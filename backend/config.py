@@ -54,6 +54,7 @@ API_ENDPOINTS = [
     "/api/retail-profiles",
     "/api/hubs",
     "/api/partners",
+    "/api/air-carriers",
     "/api/tables",
     "/api/optimise",
 ]

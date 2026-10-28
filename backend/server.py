@@ -94,6 +94,10 @@ class CapacityIQHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"count": len(DATASET["partners"]), "rows": apply_limit(DATASET["partners"], query)})
             return
 
+        if path == "/api/air-carriers":
+            self._send_json(200, DATASET["airCarriers"])
+            return
+
         if path == "/api/tables":
             self._send_json(200, dataset_summary())
             return
@@ -127,9 +131,11 @@ class CapacityIQHandler(BaseHTTPRequestHandler):
             as_int(payload.get("maxDetour", 120), 120),
             as_int(payload.get("guardrail", 74), 74),
             as_int(payload.get("minDriverScore", 72), 72),
-            as_int(payload.get("maxClearanceMinutes", 360), 360),
+            as_int(payload.get("maxClearanceMinutes", 480), 480),
             bool(payload.get("preferContracted", True)),
             build_shipment_cluster_lookup(DATASET),
+            DATASET["airCarriers"],
+            as_int(payload.get("airPricePriority", 60), 60),
         )
         self._send_json(200, {"corridor": corridor, "result": result})
 

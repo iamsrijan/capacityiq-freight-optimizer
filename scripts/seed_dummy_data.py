@@ -219,6 +219,97 @@ CORRIDORS = [
 ]
 
 
+# Demonstration assumptions for carrier price/access trade-offs. These are not
+# live airline quotes or measured airport service levels.
+AIR_CARRIERS = [
+    {
+        "id": "indigo-cargo",
+        "name": "IndiGo Cargo",
+        "facility": "Remote airline cargo facility",
+        "distance_from_common_area_km": 19,
+        "transfer_minutes": 72,
+        "cutoff_buffer_minutes": 90,
+        "rate_per_kg": 46,
+        "handling_fee": 8500,
+        "security_fee_per_kg": 1.8,
+        "on_time_percent": 88,
+        "cancellation_rate_percent": 3.1,
+        "available_capacity_tonnes": 140,
+        "supports_regulated": "true",
+        "supports_cold_chain": "false",
+        "corridor_ids": "*",
+    },
+    {
+        "id": "air-india-cargo",
+        "name": "Air India Cargo",
+        "facility": "Integrated common cargo terminal",
+        "distance_from_common_area_km": 7,
+        "transfer_minutes": 38,
+        "cutoff_buffer_minutes": 75,
+        "rate_per_kg": 60,
+        "handling_fee": 12000,
+        "security_fee_per_kg": 2.4,
+        "on_time_percent": 91,
+        "cancellation_rate_percent": 2.2,
+        "available_capacity_tonnes": 110,
+        "supports_regulated": "true",
+        "supports_cold_chain": "true",
+        "corridor_ids": "*",
+    },
+    {
+        "id": "spicexpress",
+        "name": "SpiceXpress",
+        "facility": "Secondary express cargo terminal",
+        "distance_from_common_area_km": 12,
+        "transfer_minutes": 51,
+        "cutoff_buffer_minutes": 80,
+        "rate_per_kg": 51,
+        "handling_fee": 9800,
+        "security_fee_per_kg": 2.0,
+        "on_time_percent": 85,
+        "cancellation_rate_percent": 4.1,
+        "available_capacity_tonnes": 95,
+        "supports_regulated": "true",
+        "supports_cold_chain": "false",
+        "corridor_ids": "*",
+    },
+    {
+        "id": "blue-dart-aviation",
+        "name": "Blue Dart Aviation",
+        "facility": "Dedicated express cargo terminal",
+        "distance_from_common_area_km": 4,
+        "transfer_minutes": 28,
+        "cutoff_buffer_minutes": 55,
+        "rate_per_kg": 78,
+        "handling_fee": 15000,
+        "security_fee_per_kg": 3.0,
+        "on_time_percent": 96,
+        "cancellation_rate_percent": 1.2,
+        "available_capacity_tonnes": 70,
+        "supports_regulated": "true",
+        "supports_cold_chain": "true",
+        "corridor_ids": "*",
+    },
+    {
+        "id": "akasa-air-cargo",
+        "name": "Akasa Air Cargo",
+        "facility": "Passenger terminal cargo annex",
+        "distance_from_common_area_km": 9,
+        "transfer_minutes": 42,
+        "cutoff_buffer_minutes": 70,
+        "rate_per_kg": 49,
+        "handling_fee": 9000,
+        "security_fee_per_kg": 1.9,
+        "on_time_percent": 89,
+        "cancellation_rate_percent": 2.4,
+        "available_capacity_tonnes": 85,
+        "supports_regulated": "false",
+        "supports_cold_chain": "false",
+        "corridor_ids": "*",
+    },
+]
+
+
 CARGO_TEMPLATES = [
     ("Packaged tea cartons", "road", "dry", 3600, 5400),
     ("Bamboo panels and handicrafts", "staging", "fragile", 4200, 7200),
@@ -363,9 +454,14 @@ RETAIL_PROFILES = [
         "name": "African Routes",
         "terminal": "International departures pier B",
         "passenger_mix": "Traders, students, VFR, cultural tourism",
+        "route_type": "international",
         "weekly_flights": 32,
         "base_revenue": 18200000,
         "compliance": "Alcohol secondary, handicraft-led mix",
+        "security_minutes": 62,
+        "immigration_minutes": 38,
+        "recommended_arrival_minutes": 190,
+        "boarding_buffer_minutes": 40,
         "assortments": [
             ("Indian and African handicrafts", 30, 18),
             ("Tea, coffee and sweets gifting", 24, 14),
@@ -379,9 +475,14 @@ RETAIL_PROFILES = [
         "name": "UK Routes",
         "terminal": "Premium duty-paid corridor",
         "passenger_mix": "Business, diaspora, leisure, premium gifting",
+        "route_type": "international",
         "weekly_flights": 46,
         "base_revenue": 26400000,
         "compliance": "Premium spirits where legally permitted",
+        "security_minutes": 58,
+        "immigration_minutes": 34,
+        "recommended_arrival_minutes": 185,
+        "boarding_buffer_minutes": 40,
         "assortments": [
             ("Premium Indian spirits", 26, 20),
             ("Luxury sweets and bakery gifting", 22, 13),
@@ -395,9 +496,14 @@ RETAIL_PROFILES = [
         "name": "Saudi Routes",
         "terminal": "Family and pilgrimage retail zone",
         "passenger_mix": "Pilgrimage, family travel, workers, gifting",
+        "route_type": "international",
         "weekly_flights": 58,
         "base_revenue": 23900000,
         "compliance": "Destination-appropriate non-liquor mix",
+        "security_minutes": 66,
+        "immigration_minutes": 42,
+        "recommended_arrival_minutes": 200,
+        "boarding_buffer_minutes": 45,
         "assortments": [
             ("Dates, sweets and bakery gifting", 28, 16),
             ("Fragrance and personal care", 24, 12),
@@ -411,9 +517,14 @@ RETAIL_PROFILES = [
         "name": "South East Asia Routes",
         "terminal": "International transfer retail strip",
         "passenger_mix": "Leisure, business, students, compact gifting",
+        "route_type": "international",
         "weekly_flights": 64,
         "base_revenue": 25100000,
         "compliance": "Compact gifting and travel essentials",
+        "security_minutes": 52,
+        "immigration_minutes": 28,
+        "recommended_arrival_minutes": 170,
+        "boarding_buffer_minutes": 35,
         "assortments": [
             ("Premium snacks and sweets", 25, 14),
             ("Ayurveda and wellness", 20, 11),
@@ -427,9 +538,14 @@ RETAIL_PROFILES = [
         "name": "Middle East Business Routes",
         "terminal": "Business-heavy international concourse",
         "passenger_mix": "Workers, business, family, gifting",
+        "route_type": "international",
         "weekly_flights": 72,
         "base_revenue": 27800000,
         "compliance": "Destination aware gifting and essentials",
+        "security_minutes": 60,
+        "immigration_minutes": 36,
+        "recommended_arrival_minutes": 185,
+        "boarding_buffer_minutes": 40,
         "assortments": [
             ("Fragrance and personal care", 24, 13),
             ("Sweets and bakery gifting", 23, 12),
@@ -443,9 +559,14 @@ RETAIL_PROFILES = [
         "name": "Domestic Metro Routes",
         "terminal": "High-frequency domestic pier",
         "passenger_mix": "Business, weekend leisure, quick purchases",
+        "route_type": "domestic",
         "weekly_flights": 188,
         "base_revenue": 31500000,
         "compliance": "Fast checkout, high replenishment categories",
+        "security_minutes": 24,
+        "immigration_minutes": 0,
+        "recommended_arrival_minutes": 95,
+        "boarding_buffer_minutes": 25,
         "assortments": [
             ("Ready-to-eat snacks", 26, 12),
             ("Coffee and bakery", 22, 10),
@@ -459,9 +580,14 @@ RETAIL_PROFILES = [
         "name": "Europe Long Haul Routes",
         "terminal": "Premium long-haul departure wing",
         "passenger_mix": "Leisure, business, diaspora, premium gifting",
+        "route_type": "international",
         "weekly_flights": 38,
         "base_revenue": 28600000,
         "compliance": "Premium gifting with destination rules",
+        "security_minutes": 64,
+        "immigration_minutes": 40,
+        "recommended_arrival_minutes": 195,
+        "boarding_buffer_minutes": 45,
         "assortments": [
             ("Premium Indian spirits", 22, 17),
             ("Designer craft and textiles", 20, 11),
@@ -475,9 +601,14 @@ RETAIL_PROFILES = [
         "name": "North America Routes",
         "terminal": "Ultra long-haul international zone",
         "passenger_mix": "Diaspora, students, business, long-stay travellers",
+        "route_type": "international",
         "weekly_flights": 42,
         "base_revenue": 32800000,
         "compliance": "Premium gifting and long-haul essentials",
+        "security_minutes": 70,
+        "immigration_minutes": 45,
+        "recommended_arrival_minutes": 210,
+        "boarding_buffer_minutes": 45,
         "assortments": [
             ("Premium sweets and bakery", 25, 14),
             ("Tea, coffee and wellness", 22, 10),
@@ -538,7 +669,7 @@ HUB_CITIES = [
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow({field: row.get(field, "") for field in fieldnames})
@@ -770,9 +901,14 @@ def make_retail_rows() -> tuple[list[dict[str, object]], list[dict[str, object]]
                 "name": profile["name"],
                 "terminal": profile["terminal"],
                 "passenger_mix": profile["passenger_mix"],
+                "route_type": profile["route_type"],
                 "weekly_flights": profile["weekly_flights"],
                 "base_revenue": profile["base_revenue"],
                 "compliance": profile["compliance"],
+                "security_minutes": profile["security_minutes"],
+                "immigration_minutes": profile["immigration_minutes"],
+                "recommended_arrival_minutes": profile["recommended_arrival_minutes"],
+                "boarding_buffer_minutes": profile["boarding_buffer_minutes"],
             }
         )
         for label, share, uplift in profile["assortments"]:
@@ -811,6 +947,27 @@ def main() -> None:
         DATA_DIR / "capacity.csv",
         ["corridor_id", "mode", "label", "capacity_tonnes", "available_percent", "status"],
         make_capacity_rows(rng),
+    )
+    write_csv(
+        DATA_DIR / "air_carriers.csv",
+        [
+            "id",
+            "name",
+            "facility",
+            "distance_from_common_area_km",
+            "transfer_minutes",
+            "cutoff_buffer_minutes",
+            "rate_per_kg",
+            "handling_fee",
+            "security_fee_per_kg",
+            "on_time_percent",
+            "cancellation_rate_percent",
+            "available_capacity_tonnes",
+            "supports_regulated",
+            "supports_cold_chain",
+            "corridor_ids",
+        ],
+        AIR_CARRIERS,
     )
     write_csv(
         DATA_DIR / "shipments.csv",
@@ -884,7 +1041,20 @@ def main() -> None:
     retail_profiles, retail_assortments = make_retail_rows()
     write_csv(
         DATA_DIR / "retail_profiles.csv",
-        ["id", "name", "terminal", "passenger_mix", "weekly_flights", "base_revenue", "compliance"],
+        [
+            "id",
+            "name",
+            "terminal",
+            "passenger_mix",
+            "route_type",
+            "weekly_flights",
+            "base_revenue",
+            "compliance",
+            "security_minutes",
+            "immigration_minutes",
+            "recommended_arrival_minutes",
+            "boarding_buffer_minutes",
+        ],
         retail_profiles,
     )
     write_csv(
@@ -895,7 +1065,10 @@ def main() -> None:
 
     print(f"Seeded dummy data in {DATA_DIR}")
     print(f"corridors={len(CORRIDORS)} shipments={len(CORRIDORS) * 200}")
-    print(f"hubs={len(HUB_CITIES)} partners=144 retail_profiles={len(RETAIL_PROFILES)}")
+    print(
+        f"hubs={len(HUB_CITIES)} partners=144 retail_profiles={len(RETAIL_PROFILES)} "
+        f"air_carriers={len(AIR_CARRIERS)}"
+    )
 
 
 if __name__ == "__main__":

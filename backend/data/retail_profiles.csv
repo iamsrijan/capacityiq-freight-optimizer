@@ -1,9 +1,9 @@
-id,name,terminal,passenger_mix,weekly_flights,base_revenue,compliance
-africa,African Routes,International departures pier B,"Traders, students, VFR, cultural tourism",32,18200000,"Alcohol secondary, handicraft-led mix"
-uk,UK Routes,Premium duty-paid corridor,"Business, diaspora, leisure, premium gifting",46,26400000,Premium spirits where legally permitted
-saudi,Saudi Routes,Family and pilgrimage retail zone,"Pilgrimage, family travel, workers, gifting",58,23900000,Destination-appropriate non-liquor mix
-south-east-asia,South East Asia Routes,International transfer retail strip,"Leisure, business, students, compact gifting",64,25100000,Compact gifting and travel essentials
-middle-east,Middle East Business Routes,Business-heavy international concourse,"Workers, business, family, gifting",72,27800000,Destination aware gifting and essentials
-domestic-metro,Domestic Metro Routes,High-frequency domestic pier,"Business, weekend leisure, quick purchases",188,31500000,"Fast checkout, high replenishment categories"
-europe,Europe Long Haul Routes,Premium long-haul departure wing,"Leisure, business, diaspora, premium gifting",38,28600000,Premium gifting with destination rules
-north-america,North America Routes,Ultra long-haul international zone,"Diaspora, students, business, long-stay travellers",42,32800000,Premium gifting and long-haul essentials
+id,name,terminal,passenger_mix,route_type,weekly_flights,base_revenue,compliance,security_minutes,immigration_minutes,recommended_arrival_minutes,boarding_buffer_minutes
+africa,African Routes,International departures pier B,"Traders, students, VFR, cultural tourism",international,32,18200000,"Alcohol secondary, handicraft-led mix",62,38,190,40
+uk,UK Routes,Premium duty-paid corridor,"Business, diaspora, leisure, premium gifting",international,46,26400000,Premium spirits where legally permitted,58,34,185,40
+saudi,Saudi Routes,Family and pilgrimage retail zone,"Pilgrimage, family travel, workers, gifting",international,58,23900000,Destination-appropriate non-liquor mix,66,42,200,45
+south-east-asia,South East Asia Routes,International transfer retail strip,"Leisure, business, students, compact gifting",international,64,25100000,Compact gifting and travel essentials,52,28,170,35
+middle-east,Middle East Business Routes,Business-heavy international concourse,"Workers, business, family, gifting",international,72,27800000,Destination aware gifting and essentials,60,36,185,40
+domestic-metro,Domestic Metro Routes,High-frequency domestic pier,"Business, weekend leisure, quick purchases",domestic,188,31500000,"Fast checkout, high replenishment categories",24,0,95,25
+europe,Europe Long Haul Routes,Premium long-haul departure wing,"Leisure, business, diaspora, premium gifting",international,38,28600000,Premium gifting with destination rules,64,40,195,45
+north-america,North America Routes,Ultra long-haul international zone,"Diaspora, students, business, long-stay travellers",international,42,32800000,Premium gifting and long-haul essentials,70,45,210,45

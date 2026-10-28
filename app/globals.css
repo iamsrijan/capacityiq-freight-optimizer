@@ -330,6 +330,12 @@ button {
   accent-color: var(--green);
 }
 
+.control-hint {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .primary-action {
   display: inline-flex;
   align-items: center;
@@ -851,6 +857,59 @@ button {
   font-weight: 720;
 }
 
+.clearance-band {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  padding: 14px;
+  border: 1px solid rgb(37 103 216 / 24%);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgb(229 237 255 / 76%), rgb(255 255 255 / 88%));
+}
+
+.clearance-copy {
+  min-width: 0;
+}
+
+.clearance-copy .section-title {
+  margin-bottom: 8px;
+}
+
+.clearance-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.clearance-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.clearance-metrics span {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.clearance-metrics strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
 .store-layout {
   display: flex;
   gap: 10px;
@@ -915,6 +974,11 @@ button {
   margin-top: 16px;
   color: var(--green);
   font-weight: 760;
+}
+
+.clearance-note {
+  margin-top: 10px;
+  color: var(--blue);
 }
 
 @media (max-width: 1180px) {
@@ -1045,5 +1109,10 @@ button {
 
   .store-zone {
     min-height: 92px;
+  }
+
+  .clearance-band,
+  .clearance-metrics {
+    grid-template-columns: 1fr;
   }
 }

@@ -40,6 +40,7 @@ export async function fetchBackendOptimization(inputs: NetworkInputs) {
       minDriverScore: inputs.minDriverScore,
       maxClearanceMinutes: inputs.maxClearanceMinutes,
       preferContracted: inputs.preferContracted,
+      airPricePriority: inputs.airPricePriority,
     }),
   });
 

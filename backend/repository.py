@@ -19,6 +19,7 @@ def read_csv_table(name: str) -> list[dict[str, str]]:
 def load_dataset() -> dict[str, Any]:
     corridors_raw = read_csv_table("corridors.csv")
     capacity_raw = read_csv_table("capacity.csv")
+    air_carriers_raw = read_csv_table("air_carriers.csv")
     shipments_raw = read_csv_table("shipments.csv")
     retail_raw = read_csv_table("retail_profiles.csv")
     retail_assortments_raw = read_csv_table("retail_assortments.csv")
@@ -119,9 +120,14 @@ def load_dataset() -> dict[str, Any]:
             "name": row["name"],
             "terminal": row["terminal"],
             "passengerMix": row["passenger_mix"],
+            "routeType": row.get("route_type", "international"),
             "weeklyFlights": as_int(row["weekly_flights"]),
             "baseRevenue": as_int(row["base_revenue"]),
             "compliance": row["compliance"],
+            "securityMinutes": as_int(row.get("security_minutes", 55), 55),
+            "immigrationMinutes": as_int(row.get("immigration_minutes", 30), 30),
+            "recommendedArrivalMinutes": as_int(row.get("recommended_arrival_minutes", 180), 180),
+            "boardingBufferMinutes": as_int(row.get("boarding_buffer_minutes", 35), 35),
             "assortments": assortments_by_retail[row["id"]],
         }
         for row in retail_raw
@@ -157,11 +163,33 @@ def load_dataset() -> dict[str, Any]:
         for row in partners_raw
     ]
 
+    air_carriers = [
+        {
+            "id": row["id"],
+            "name": row["name"],
+            "facility": row["facility"],
+            "distanceFromCommonAreaKm": as_int(row["distance_from_common_area_km"]),
+            "transferMinutes": as_int(row["transfer_minutes"]),
+            "cutoffBufferMinutes": as_int(row["cutoff_buffer_minutes"]),
+            "ratePerKg": as_float(row["rate_per_kg"]),
+            "handlingFee": as_int(row["handling_fee"]),
+            "securityFeePerKg": as_float(row["security_fee_per_kg"]),
+            "onTimePercent": as_int(row["on_time_percent"]),
+            "cancellationRatePercent": as_float(row["cancellation_rate_percent"]),
+            "availableCapacityTonnes": as_int(row["available_capacity_tonnes"]),
+            "supportsRegulated": row["supports_regulated"].strip().lower() == "true",
+            "supportsColdChain": row["supports_cold_chain"].strip().lower() == "true",
+            "corridorIds": [item.strip() for item in row["corridor_ids"].split("|") if item.strip()],
+        }
+        for row in air_carriers_raw
+    ]
+
     return {
         "corridors": corridors,
         "retailProfiles": retail_profiles,
         "hubs": hubs,
         "partners": partners,
+        "airCarriers": air_carriers,
         "rawCounts": {
             "corridors": len(corridors_raw),
             "capacityRows": len(capacity_raw),
@@ -170,6 +198,7 @@ def load_dataset() -> dict[str, Any]:
             "retailAssortments": len(retail_assortments_raw),
             "hubs": len(hubs_raw),
             "partners": len(partners_raw),
+            "airCarriers": len(air_carriers_raw),
         },
     }
 

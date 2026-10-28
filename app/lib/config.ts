@@ -1,7 +1,7 @@
 import type { Mode, NetworkInputs } from "./types";
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
 export const initialNetworkInputs: NetworkInputs = {
   corridorId: "northeast",
@@ -10,8 +10,9 @@ export const initialNetworkInputs: NetworkInputs = {
   maxDetour: 120,
   guardrail: 74,
   minDriverScore: 72,
-  maxClearanceMinutes: 360,
+  maxClearanceMinutes: 480,
   preferContracted: true,
+  airPricePriority: 60,
 };
 
 export const modeTargetFill: Record<Mode, number> = {
@@ -30,6 +31,7 @@ export function sameNetworkInputs(first: NetworkInputs, second: NetworkInputs) {
     first.guardrail === second.guardrail &&
     first.minDriverScore === second.minDriverScore &&
     first.maxClearanceMinutes === second.maxClearanceMinutes &&
-    first.preferContracted === second.preferContracted
+    first.preferContracted === second.preferContracted &&
+    first.airPricePriority === second.airPricePriority
   );
 }

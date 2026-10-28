@@ -12,6 +12,24 @@ export type ModeCapacity = {
   status: string;
 };
 
+export type AirCarrier = {
+  id: string;
+  name: string;
+  facility: string;
+  distanceFromCommonAreaKm: number;
+  transferMinutes: number;
+  cutoffBufferMinutes: number;
+  ratePerKg: number;
+  handlingFee: number;
+  securityFeePerKg: number;
+  onTimePercent: number;
+  cancellationRatePercent: number;
+  availableCapacityTonnes: number;
+  supportsRegulated: boolean;
+  supportsColdChain: boolean;
+  corridorIds: string[];
+};
+
 export type Shipment = {
   id: string;
   shipper: string;
@@ -80,12 +98,25 @@ export type ScoredShipment = Shipment & {
     scheduleFit: number;
     clusterFit?: number;
     clusterAdjustment?: number;
+    carrierFit?: number;
+    carrierAdjustment?: number;
   };
   riskFlags?: string[];
   clusterLabel?: string;
   clusterFit?: number;
   clusterAdjustment?: number;
   clusterInsight?: string;
+  assignedCarrier?: string;
+  carrierFacility?: string;
+  carrierRatePerKg?: number;
+  carrierDistanceKm?: number;
+  carrierTransferMinutes?: number;
+  carrierCutoffBufferMinutes?: number;
+  carrierTotalClearanceMinutes?: number;
+  estimatedCarrierCost?: number;
+  carrierFit?: number;
+  carrierAdjustment?: number;
+  carrierTradeoff?: string;
 };
 
 export type RecommendedAction = {
@@ -117,6 +148,17 @@ export type RecommendedAction = {
   clusterFit?: number;
   clusterAdjustment?: number;
   clusterInsight?: string;
+  assignedCarrier?: string;
+  carrierFacility?: string;
+  carrierRatePerKg?: number;
+  carrierDistanceKm?: number;
+  carrierTransferMinutes?: number;
+  carrierCutoffBufferMinutes?: number;
+  carrierTotalClearanceMinutes?: number;
+  estimatedCarrierCost?: number;
+  carrierFit?: number;
+  carrierAdjustment?: number;
+  carrierTradeoff?: string;
 };
 
 export type RetailProfile = {
@@ -124,9 +166,14 @@ export type RetailProfile = {
   name: string;
   terminal: string;
   passengerMix: string;
+  routeType: "domestic" | "international";
   weeklyFlights: number;
   baseRevenue: number;
   compliance: string;
+  securityMinutes: number;
+  immigrationMinutes: number;
+  recommendedArrivalMinutes: number;
+  boardingBufferMinutes: number;
   assortments: Array<{ label: string; share: number; uplift: number }>;
 };
 
@@ -139,6 +186,7 @@ export type BackendSummary = {
   hubs: number;
   partners: number;
   totalCapacityTonnes: number;
+  airCarriers?: number;
 };
 
 export type DataSource = "loading" | "backend" | "fallback";
@@ -167,6 +215,9 @@ export type OptimizationResult = {
     avgMonthlyCost: number;
     avgClusterFit?: number;
     clusterBoostedMatches?: number;
+    avgAirCarrierCost?: number;
+    avgCarrierTransferMinutes?: number;
+    remoteCarrierAssignments?: number;
   };
   remaining: Partial<Record<Mode, number>>;
   modeUtilisation?: ModeUtilizationResult[];
@@ -189,6 +240,7 @@ export type NetworkInputs = {
   minDriverScore: number;
   maxClearanceMinutes: number;
   preferContracted: boolean;
+  airPricePriority: number;
 };
 
 export type MetricIcon = LucideIcon;
